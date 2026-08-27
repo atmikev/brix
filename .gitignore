@@ -10,3 +10,6 @@ out/
 
 # OS
 .DS_Store
+
+# Brix runtime auto-saves
+.walkthroughs/

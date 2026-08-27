@@ -1,6 +1,6 @@
-# Uninstalling Code Explainer
+# Uninstalling Brix
 
-This guide walks you through completely removing Code Explainer from your system. Each step includes a verification check so you can confirm the removal was successful.
+This guide walks you through completely removing Brix from your system. Each step includes a verification check so you can confirm the removal was successful.
 
 ---
 
@@ -35,18 +35,18 @@ fi
 
 ```bash
 # VS Code
-code --uninstall-extension srujangurram.code-explainer 2>/dev/null && echo "Removed from VS Code" || echo "Not installed in VS Code"
+code --uninstall-extension srujangurram.brix 2>/dev/null && echo "Removed from VS Code" || echo "Not installed in VS Code"
 
 # Cursor
-cursor --uninstall-extension srujangurram.code-explainer 2>/dev/null && echo "Removed from Cursor" || echo "Not installed in Cursor"
+cursor --uninstall-extension srujangurram.brix 2>/dev/null && echo "Removed from Cursor" || echo "Not installed in Cursor"
 ```
 
 **Verify:**
 
 ```bash
-# Should NOT list code-explainer
-code --list-extensions 2>/dev/null | grep -i code-explainer || echo "VS Code: clean"
-cursor --list-extensions 2>/dev/null | grep -i code-explainer || echo "Cursor: clean"
+# Should NOT list brix
+code --list-extensions 2>/dev/null | grep -i brix || echo "VS Code: clean"
+cursor --list-extensions 2>/dev/null | grep -i brix || echo "Cursor: clean"
 ```
 
 After uninstalling, reload your editor: **Cmd+Shift+P** → **Developer: Reload Window**
@@ -58,13 +58,13 @@ After uninstalling, reload your editor: **Cmd+Shift+P** → **Developer: Reload 
 This removes the skill files, Python virtual environment, and TTS model cache.
 
 ```bash
-rm -rf ~/.claude/skills/explainer
+rm -rf ~/.claude/skills/brix
 ```
 
 **Verify:**
 
 ```bash
-[ -d ~/.claude/skills/explainer ] && echo "WARNING: directory still exists" || echo "Skill directory removed"
+[ -d ~/.claude/skills/brix ] && echo "WARNING: directory still exists" || echo "Skill directory removed"
 ```
 
 ---
@@ -74,8 +74,8 @@ rm -rf ~/.claude/skills/explainer
 Remove temporary files created during use.
 
 ```bash
-rm -f ~/.claude-explainer-port
-rm -f ~/.claude-explainer-token
+rm -f ~/.claude-brix-port
+rm -f ~/.claude-brix-token
 rm -f /tmp/tts-server.sock
 rm -f /tmp/tts-server.pid
 rm -f /tmp/tts-server.log
@@ -84,7 +84,7 @@ rm -f /tmp/tts-server.log
 **Verify:**
 
 ```bash
-for f in ~/.claude-explainer-port ~/.claude-explainer-token /tmp/tts-server.sock /tmp/tts-server.pid /tmp/tts-server.log; do
+for f in ~/.claude-brix-port ~/.claude-brix-token /tmp/tts-server.sock /tmp/tts-server.pid /tmp/tts-server.log; do
     [ -e "$f" ] && echo "WARNING: $f still exists" || echo "$f removed"
 done
 ```
@@ -99,7 +99,7 @@ To remove everything in one go, run this from your terminal:
 #!/bin/bash
 set -e
 
-echo "Uninstalling Code Explainer..."
+echo "Uninstalling Brix..."
 
 # 1. Stop TTS server
 if [ -f /tmp/tts-server.pid ]; then
@@ -108,15 +108,15 @@ if [ -f /tmp/tts-server.pid ]; then
 fi
 
 # 2. Uninstall extension
-code --uninstall-extension srujangurram.code-explainer 2>/dev/null && echo "  Removed VS Code extension" || true
-cursor --uninstall-extension srujangurram.code-explainer 2>/dev/null && echo "  Removed Cursor extension" || true
+code --uninstall-extension srujangurram.brix 2>/dev/null && echo "  Removed VS Code extension" || true
+cursor --uninstall-extension srujangurram.brix 2>/dev/null && echo "  Removed Cursor extension" || true
 
 # 3. Remove skill directory
-rm -rf ~/.claude/skills/explainer
+rm -rf ~/.claude/skills/brix
 echo "  Removed skill directory"
 
 # 4. Clean up runtime files
-rm -f ~/.claude-explainer-port ~/.claude-explainer-token
+rm -f ~/.claude-brix-port ~/.claude-brix-token
 rm -f /tmp/tts-server.sock /tmp/tts-server.pid /tmp/tts-server.log
 echo "  Cleaned up runtime files"
 
@@ -130,7 +130,7 @@ echo "Done. Reload your editor: Cmd+Shift+P → 'Developer: Reload Window'"
 
 | Component | Location | Size |
 |-----------|----------|------|
-| Skill files + venv + TTS model | `~/.claude/skills/explainer/` | ~500 MB |
+| Skill files + venv + TTS model | `~/.claude/skills/brix/` | ~500 MB |
 | VS Code extension | Editor extensions directory | ~1 MB |
-| Port/token files | `~/.claude-explainer-port`, `~/.claude-explainer-token` | <1 KB |
+| Port/token files | `~/.claude-brix-port`, `~/.claude-brix-token` | <1 KB |
 | TTS runtime files | `/tmp/tts-server.*` | <1 KB |

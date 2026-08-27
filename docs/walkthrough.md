@@ -37,7 +37,7 @@ Sidebar-driven playback. Send the walkthrough plan to the sidebar extension whic
 cat > /tmp/walkthrough-plan.json << 'EOF'
 { "type": "set_plan", "title": "...", "segments": [...] }
 EOF
-~/.claude/skills/explainer/scripts/explainer.sh plan /tmp/walkthrough-plan.json
+~/.claude/skills/brix/scripts/brix.sh plan /tmp/walkthrough-plan.json
 ```
 
 The sidebar loads the plan and shows the first segment's code location. Playback does NOT start automatically — the user must press the Play button on the sidebar to begin. Tell the user: **"Press ▶ Play on the sidebar to start the walkthrough."**
@@ -45,12 +45,12 @@ The sidebar loads the plan and shows the first segment's code location. Playback
 3. **Handle user actions (optional):**
 
 ```bash
-~/.claude/skills/explainer/scripts/explainer.sh wait-action 60
+~/.claude/skills/brix/scripts/brix.sh wait-action 60
 ```
 
 Returns e.g. `{"type": "user_action", "action": "next", "segmentId": 3}`. Handle as needed with `goto`, `insert_after`, or `resume` commands.
 
-4. **Other commands:** `explainer.sh state` (check state), `explainer.sh stop` (stop walkthrough).
+4. **Other commands:** `brix.sh state` (check state), `brix.sh stop` (stop walkthrough).
 
 ## Segment guidelines
 

@@ -255,7 +255,7 @@ git commit -m "feat: add save/load/list API endpoints"
 
 **Step 1: Add storage to extension.ts**
 
-After `const server = new ExplainerServer(walkthrough);`, add:
+After `const server = new BrixServer(walkthrough);`, add:
 
 ```typescript
 import { WalkthroughStorage } from "./storage";
@@ -273,7 +273,7 @@ if (wsFolder) {
 Add to the `context.subscriptions.push(...)` block:
 
 ```typescript
-vscode.commands.registerCommand('codeExplainer.saveWalkthrough', async () => {
+vscode.commands.registerCommand('brix.saveWalkthrough', async () => {
 	if (!storage) {
 		vscode.window.showErrorMessage("No workspace folder open");
 		return;
@@ -305,7 +305,7 @@ vscode.commands.registerCommand('codeExplainer.saveWalkthrough', async () => {
 **Step 3: Register load command**
 
 ```typescript
-vscode.commands.registerCommand('codeExplainer.loadWalkthrough', async () => {
+vscode.commands.registerCommand('brix.loadWalkthrough', async () => {
 	if (!storage) {
 		vscode.window.showErrorMessage("No workspace folder open");
 		return;
@@ -339,8 +339,8 @@ vscode.commands.registerCommand('codeExplainer.loadWalkthrough', async () => {
 Add to `contributes.commands` array:
 
 ```json
-{ "command": "codeExplainer.saveWalkthrough", "title": "Code Explainer: Save Walkthrough" },
-{ "command": "codeExplainer.loadWalkthrough", "title": "Code Explainer: Load Walkthrough" }
+{ "command": "brix.saveWalkthrough", "title": "Brix: Save Walkthrough" },
+{ "command": "brix.loadWalkthrough", "title": "Brix: Load Walkthrough" }
 ```
 
 **Step 5: Verify it compiles**
@@ -417,7 +417,7 @@ Add browse list to idle-view:
 ```html
 <div id="idle-view">
 	<p class="idle-text">Waiting for walkthrough...</p>
-	<p class="idle-hint">Run <code>/explainer</code> in your coding agent to start</p>
+	<p class="idle-hint">Run <code>/brix</code> in your coding agent to start</p>
 	<div id="saved-list-section" style="display:none;">
 		<h3 class="saved-list-title">Saved Walkthroughs</h3>
 		<ul id="saved-list"></ul>
@@ -528,7 +528,7 @@ In the `sidebar.setMessageHandler` switch, add cases:
 
 ```typescript
 case "save":
-	vscode.commands.executeCommand('codeExplainer.saveWalkthrough');
+	vscode.commands.executeCommand('brix.saveWalkthrough');
 	break;
 case "load":
 	if (storage) {
@@ -563,14 +563,14 @@ git commit -m "feat: add save button and browse list to sidebar"
 
 ---
 
-### Task 5: Add CLI commands to explainer.sh
+### Task 5: Add CLI commands to brix.sh
 
 **Files:**
-- Modify: `scripts/explainer.sh`
+- Modify: `scripts/brix.sh`
 
 **Step 1: Add save, load, list commands**
 
-Add to the `case` statement in explainer.sh:
+Add to the `case` statement in brix.sh:
 
 ```bash
 save)
@@ -589,7 +589,7 @@ save)
     ;;
 load)
     if [ -z "$2" ]; then
-        echo "Usage: explainer.sh load <name>" >&2
+        echo "Usage: brix.sh load <name>" >&2
         exit 1
     fi
     curl -s -X POST "$BASE/api/load" \
@@ -605,13 +605,13 @@ list)
 Update the usage line:
 
 ```bash
-echo "Usage: explainer.sh {plan|send|state|wait-action|stop|save|load|list}" >&2
+echo "Usage: brix.sh {plan|send|state|wait-action|stop|save|load|list}" >&2
 ```
 
 **Step 2: Commit**
 
 ```bash
-git add scripts/explainer.sh
+git add scripts/brix.sh
 git commit -m "feat: add save/load/list CLI commands"
 ```
 
@@ -634,15 +634,15 @@ Then install the `.vsix` file in VS Code.
 
 **Step 3: Manual test — save flow**
 
-1. Run a walkthrough via agent (or send a test plan via `explainer.sh plan`)
-2. Open command palette → "Code Explainer: Save Walkthrough"
+1. Run a walkthrough via agent (or send a test plan via `brix.sh plan`)
+2. Open command palette → "Brix: Save Walkthrough"
 3. Verify: Input box shows with slugified title
 4. Verify: File appears in `.walkthroughs/` with relative paths
 5. Verify: Notification shown
 
 **Step 4: Manual test — load flow**
 
-1. Open command palette → "Code Explainer: Load Walkthrough"
+1. Open command palette → "Brix: Load Walkthrough"
 2. Verify: QuickPick shows saved walkthrough
 3. Select it → Verify: Walkthrough loads and sidebar shows it
 4. Verify: Paths resolved correctly (highlighting works)
@@ -655,9 +655,9 @@ Then install the `.vsix` file in VS Code.
 
 **Step 6: Manual test — CLI**
 
-1. Run: `./scripts/explainer.sh list` → Verify: Shows saved walkthroughs
-2. Run: `./scripts/explainer.sh save test-name` → Verify: Saves current plan
-3. Run: `./scripts/explainer.sh load test-name` → Verify: Loads the plan
+1. Run: `./scripts/brix.sh list` → Verify: Shows saved walkthroughs
+2. Run: `./scripts/brix.sh save test-name` → Verify: Saves current plan
+3. Run: `./scripts/brix.sh load test-name` → Verify: Loads the plan
 
 **Step 7: Commit any fixes**
 

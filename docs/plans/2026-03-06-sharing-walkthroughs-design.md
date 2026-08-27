@@ -38,9 +38,9 @@ Filename: `.walkthroughs/<title-slug>.json` (e.g., `authentication-flow.json`)
 ## Save Flow
 
 Triggers:
-- Command palette: "Code Explainer: Save Walkthrough"
+- Command palette: "Brix: Save Walkthrough"
 - Sidebar: save icon in walkthrough header
-- Agent CLI: `explainer.sh save [name]`
+- Agent CLI: `brix.sh save [name]`
 
 Behavior:
 1. Take current in-memory plan
@@ -52,9 +52,9 @@ Behavior:
 ## Load & Replay Flow
 
 Triggers:
-- Command palette: "Code Explainer: Load Walkthrough" → QuickPick list
+- Command palette: "Brix: Load Walkthrough" → QuickPick list
 - Sidebar: "Saved Walkthroughs" browse section (idle state) or TreeView
-- Agent CLI: `explainer.sh load <name>`
+- Agent CLI: `brix.sh load <name>`
 
 Behavior:
 1. Read JSON from `.walkthroughs/`
@@ -69,10 +69,10 @@ Behavior:
 
 ## Agent/CLI Integration
 
-New `explainer.sh` commands:
-- `explainer.sh save [name]` — POST to `/api/save`
-- `explainer.sh load [name]` — POST to `/api/message` with loaded plan
-- `explainer.sh list` — GET `/api/walkthroughs`
+New `brix.sh` commands:
+- `brix.sh save [name]` — POST to `/api/save`
+- `brix.sh load [name]` — POST to `/api/message` with loaded plan
+- `brix.sh list` — GET `/api/walkthroughs`
 
 New extension API endpoints:
 - `POST /api/save` — saves current plan to disk with optional name

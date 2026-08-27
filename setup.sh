@@ -2,7 +2,7 @@
 set -e
 
 # ============================================================================
-# Code Explainer — Setup Script
+# Brix — Setup Script
 # ============================================================================
 # Interactive code walkthrough skill with VS Code highlighting and TTS.
 # Works on macOS with Apple Silicon (M1/M2/M3/M4).
@@ -39,7 +39,7 @@ skip() { echo -e "  ${YELLOW}→${NC} $1 (skipped)"; }
 
 echo ""
 echo -e "${BOLD}╔══════════════════════════════════════════════╗${NC}"
-echo -e "${BOLD}║   Code Explainer — Setup                     ║${NC}"
+echo -e "${BOLD}║   Brix — Setup                     ║${NC}"
 echo -e "${BOLD}╚══════════════════════════════════════════════╝${NC}"
 
 # ── Step 1: Check prerequisites ─────────────────────────────────────────────
@@ -196,14 +196,14 @@ header "Installing TTS dependencies (mlx-audio + sounddevice)"
 echo "  This may take a few minutes on first install..."
 
 if $USE_UV; then
-    uv pip install --python "$VENV_PYTHON" pip mlx-audio sounddevice 2>&1 | grep -E "^(Installed|Already|Resolved)" | head -5
+    uv pip install --python "$VENV_PYTHON" pip mlx-audio 'misaki[en]' sounddevice 2>&1 | grep -E "^(Installed|Already|Resolved)" | head -5
 else
-    "$VENV_PYTHON" -m pip install --quiet mlx-audio sounddevice 2>&1 | tail -3
+    "$VENV_PYTHON" -m pip install --quiet mlx-audio 'misaki[en]' sounddevice 2>&1 | tail -3
 fi
 ok "TTS dependencies installed"
 
 # Verify TTS can import
-if "$VENV_PYTHON" -c "from mlx_audio.tts.generate import generate_audio; print('ok')" 2>/dev/null | grep -q "ok"; then
+if "$VENV_PYTHON" -c "from mlx_audio.tts.generate import generate_audio; import misaki.en; print('ok')" 2>/dev/null | grep -q "ok"; then
     ok "TTS engine verified"
 else
     warn "TTS import failed — TTS will fall back to macOS 'say' command"
@@ -241,7 +241,7 @@ cd "$SCRIPT_DIR"
 # ── Step 5: Make scripts executable ─────────────────────────────────────────
 header "Setting up scripts"
 
-chmod +x "$SCRIPT_DIR/scripts/explainer.sh"
+chmod +x "$SCRIPT_DIR/scripts/brix.sh"
 chmod +x "$SCRIPT_DIR/scripts/tts_server.py"
 chmod +x "$SCRIPT_DIR/setup.sh"
 ok "All scripts marked executable"
@@ -308,40 +308,40 @@ fi
 
 # Check if skill is already in a known skills directory
 IN_SKILLS_DIR=false
-if [[ "$SCRIPT_DIR" == *"/skills/explainer"* ]]; then
+if [[ "$SCRIPT_DIR" == *"/skills/brix"* ]]; then
     IN_SKILLS_DIR=true
 fi
 
 if $IN_SKILLS_DIR; then
-    echo -e "  2. Use it: ${BLUE}/explainer <feature name>${NC}"
+    echo -e "  2. Use it: ${BLUE}/brix <feature name>${NC}"
 else
     echo -e "  2. Copy the skill to your agent's skills directory:"
     echo ""
     if [[ " ${DETECTED_AGENTS[*]} " =~ " Claude Code " ]]; then
-        echo -e "     ${BOLD}Claude Code:${NC}  ${BLUE}cp -r $SCRIPT_DIR ~/.claude/skills/explainer${NC}"
+        echo -e "     ${BOLD}Claude Code:${NC}  ${BLUE}cp -r $SCRIPT_DIR ~/.claude/skills/brix${NC}"
     fi
     if [[ " ${DETECTED_AGENTS[*]} " =~ " Amp " ]]; then
-        echo -e "     ${BOLD}Amp:${NC}          ${BLUE}cp -r $SCRIPT_DIR ~/.config/agents/skills/explainer${NC}"
+        echo -e "     ${BOLD}Amp:${NC}          ${BLUE}cp -r $SCRIPT_DIR ~/.config/agents/skills/brix${NC}"
     fi
     if [[ " ${DETECTED_AGENTS[*]} " =~ " OpenCode " ]]; then
-        echo -e "     ${BOLD}OpenCode:${NC}     ${BLUE}cp -r $SCRIPT_DIR ~/.config/opencode/skills/explainer${NC}"
+        echo -e "     ${BOLD}OpenCode:${NC}     ${BLUE}cp -r $SCRIPT_DIR ~/.config/opencode/skills/brix${NC}"
     fi
     if [[ " ${DETECTED_AGENTS[*]} " =~ " Codex CLI " ]]; then
-        echo -e "     ${BOLD}Codex CLI:${NC}    ${BLUE}cp -r $SCRIPT_DIR ~/.codex/skills/explainer${NC}"
+        echo -e "     ${BOLD}Codex CLI:${NC}    ${BLUE}cp -r $SCRIPT_DIR ~/.codex/skills/brix${NC}"
     fi
     # If no agents detected, show all options
     if [[ ${#DETECTED_AGENTS[@]} -eq 0 ]]; then
-        echo -e "     ${BOLD}Claude Code:${NC}  ${BLUE}cp -r $SCRIPT_DIR ~/.claude/skills/explainer${NC}"
-        echo -e "     ${BOLD}Amp:${NC}          ${BLUE}cp -r $SCRIPT_DIR ~/.config/agents/skills/explainer${NC}"
-        echo -e "     ${BOLD}OpenCode:${NC}     ${BLUE}cp -r $SCRIPT_DIR ~/.config/opencode/skills/explainer${NC}"
-        echo -e "     ${BOLD}Codex CLI:${NC}    ${BLUE}cp -r $SCRIPT_DIR ~/.codex/skills/explainer${NC}"
+        echo -e "     ${BOLD}Claude Code:${NC}  ${BLUE}cp -r $SCRIPT_DIR ~/.claude/skills/brix${NC}"
+        echo -e "     ${BOLD}Amp:${NC}          ${BLUE}cp -r $SCRIPT_DIR ~/.config/agents/skills/brix${NC}"
+        echo -e "     ${BOLD}OpenCode:${NC}     ${BLUE}cp -r $SCRIPT_DIR ~/.config/opencode/skills/brix${NC}"
+        echo -e "     ${BOLD}Codex CLI:${NC}    ${BLUE}cp -r $SCRIPT_DIR ~/.codex/skills/brix${NC}"
     fi
     echo ""
     echo -e "     For rule-based agents (Cursor, Windsurf, Kilo, Roo, Cline),"
     echo -e "     copy ${BLUE}SKILL.md${NC} into your agent's rules directory."
     echo -e "     See the README for details."
     echo ""
-    echo -e "  3. Use it: ${BLUE}/explainer <feature name>${NC}"
+    echo -e "  3. Use it: ${BLUE}/brix <feature name>${NC}"
 fi
 echo ""
 echo -e "  ${BOLD}Modes:${NC}"

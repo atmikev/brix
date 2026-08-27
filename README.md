@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="vscode-extension/media/icon.png" width="120" height="120" alt="Code Explainer icon" />
+  <img src="vscode-extension/media/icon.png" width="120" height="120" alt="Brix icon" />
 </p>
 
-<h1 align="center">Code Explainer</h1>
+<h1 align="center">Brix</h1>
 
 <p align="center">
   <strong>✨ Interactive code walkthroughs with editor highlighting and AI-powered voice narration.</strong>
@@ -13,13 +13,12 @@
 </p>
 
 <p align="center">
-  <img src="docs/cover.png" alt="Code Explainer cover" width="100%" />
+  <img src="docs/cover.png" alt="Brix cover" width="100%" />
 </p>
 
-<p align="center">
-  <a href="https://youtu.be/3eX4hGW9ym8">🎬 Watch Demo</a> &nbsp;·&nbsp;
-  <a href="https://srujangurram.me/blog/code-explainer">📝 Read Writeup</a>
-</p>
+---
+
+> **Brix** is a fork of [Code Explainer](https://github.com/Royal-lobster/code-explainer) by Srujan Gurram (MIT). It keeps the engine — extension server, synced highlights, local TTS — and extends it toward pair-programming review: alongside explaining existing code, Brix walks you through **changes** (diffs, branches, PRs) interleaved with the surrounding code they land in, ordered by importance instead of file order. See `docs/review.md` for the review mode and `design/` for where this is headed (decision queue, distilled transcript, voice-in).
 
 ---
 
@@ -46,7 +45,7 @@
 Just tell your coding agent:
 
 ```
-Install the code explainer skill from https://github.com/Royal-lobster/code-explainer
+Install the code brix skill from https://github.com/Royal-lobster/brix
 ```
 
 Your agent will clone the repo into the skills directory, run `setup.sh`, and ask you to reload your editor — all while keeping you in the loop at each step.
@@ -60,15 +59,15 @@ These agents support the `skills/<name>/SKILL.md` format natively. Clone directl
 
 | Agent | Install commands |
 |-------|-----------------|
-| **Claude Code** | `git clone https://github.com/Royal-lobster/code-explainer.git ~/.claude/skills/explainer` |
-| **Amp** | `git clone https://github.com/Royal-lobster/code-explainer.git ~/.config/agents/skills/explainer` |
-| **OpenCode** | `git clone https://github.com/Royal-lobster/code-explainer.git ~/.config/opencode/skills/explainer` |
-| **Codex CLI** | `git clone https://github.com/Royal-lobster/code-explainer.git ~/.codex/skills/explainer` |
+| **Claude Code** | `git clone https://github.com/Royal-lobster/brix.git ~/.claude/skills/brix` |
+| **Amp** | `git clone https://github.com/Royal-lobster/brix.git ~/.config/agents/skills/brix` |
+| **OpenCode** | `git clone https://github.com/Royal-lobster/brix.git ~/.config/opencode/skills/brix` |
+| **Codex CLI** | `git clone https://github.com/Royal-lobster/brix.git ~/.codex/skills/brix` |
 
 Then run setup:
 
 ```bash
-<SKILLS_DIR>/explainer/setup.sh
+<SKILLS_DIR>/brix/setup.sh
 # Reload your editor: Cmd+Shift+P → "Developer: Reload Window"
 ```
 
@@ -78,10 +77,10 @@ These agents use their own rules/instructions format. Clone to any location, run
 
 ```bash
 # 1. Clone to a shared location
-git clone https://github.com/Royal-lobster/code-explainer.git ~/code-explainer
+git clone https://github.com/Royal-lobster/brix.git ~/brix
 
 # 2. Run setup
-~/code-explainer/setup.sh
+~/brix/setup.sh
 
 # 3. Reload your editor: Cmd+Shift+P → "Developer: Reload Window"
 ```
@@ -90,11 +89,11 @@ Then add a rule or instruction pointing to the skill:
 
 | Agent | How to add |
 |-------|------------|
-| **Cursor** | Add a `.cursor/rules/explainer.mdc` file in your project that includes the contents of `SKILL.md` |
+| **Cursor** | Add a `.cursor/rules/brix.mdc` file in your project that includes the contents of `SKILL.md` |
 | **Windsurf** | Append the contents of `SKILL.md` to `~/.codeium/windsurf/memories/global_rules.md` |
-| **Kilo Code** | Copy `SKILL.md` to `~/.kilocode/rules/explainer.md` |
-| **Roo Code** | Copy `SKILL.md` to `~/.roo/rules/explainer.md` |
-| **Cline** | Copy `SKILL.md` to your `.clinerules/explainer.md` directory |
+| **Kilo Code** | Copy `SKILL.md` to `~/.kilocode/rules/brix.md` |
+| **Roo Code** | Copy `SKILL.md` to `~/.roo/rules/brix.md` |
+| **Cline** | Copy `SKILL.md` to your `.clinerules/brix.md` directory |
 
 > **Note:** The `SKILL.md` references relative paths (e.g., `docs/assess.md`), so the full repo must exist at the cloned location. For rule-based agents, ensure paths in the copied rules resolve correctly or use absolute paths.
 
@@ -112,7 +111,7 @@ Then add a rule or instruction pointing to the skill:
 In your coding agent:
 
 ```
-/explainer the authentication system
+/brix the authentication system
 ```
 
 Or naturally:
@@ -175,18 +174,18 @@ Save walkthroughs as portable JSON files that live in your repo:
 
 ```bash
 # Save via CLI
-./scripts/explainer.sh save auth-flow
+./scripts/brix.sh save auth-flow
 
 # Load a saved walkthrough
-./scripts/explainer.sh load auth-flow
+./scripts/brix.sh load auth-flow
 
 # List all saved walkthroughs
-./scripts/explainer.sh list
+./scripts/brix.sh list
 ```
 
 Or use the VS Code command palette:
-- **Code Explainer: Save Walkthrough** — Save with a custom name
-- **Code Explainer: Load Walkthrough** — Browse and load saved walkthroughs
+- **Brix: Save Walkthrough** — Save with a custom name
+- **Brix: Load Walkthrough** — Browse and load saved walkthroughs
 
 Saved walkthroughs are stored in `.walkthroughs/` at the workspace root with relative file paths, so teammates can pull them and replay on their own machine. The sidebar also shows a browse list of saved walkthroughs when no walkthrough is active.
 
@@ -220,7 +219,7 @@ You can also type commands in your agent's chat:
 
 ## 🗣️ Voice Configuration
 
-Code Explainer uses [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) via [mlx-audio](https://github.com/Blaizzy/mlx-audio) for high-quality local TTS. Falls back to macOS `say` if unavailable.
+Brix uses [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) via [mlx-audio](https://github.com/Blaizzy/mlx-audio) for high-quality local TTS. Falls back to macOS `say` if unavailable.
 
 ```bash
 # Change voice
@@ -265,16 +264,16 @@ Coding Agent ──HTTP──▶ Extension Server ──Events──▶ Sidebar 
 | 🔊 **TTS Bridge** (`tts-bridge.ts`) | Streams audio from the Python TTS server to the sidebar webview via WebSocket. |
 | 🐍 **TTS Server** (`tts_server.py`) | Persistent Python daemon that loads Kokoro once and streams audio over a Unix socket. |
 | 💾 **Storage** (`storage.ts`) | Save and load walkthroughs as `.walkthrough.json` files for replay and sharing. |
-| 📡 **Helper Script** (`explainer.sh`) | CLI wrapper around the HTTP API — used by the coding agent to send plans and poll for user actions. |
+| 📡 **Helper Script** (`brix.sh`) | CLI wrapper around the HTTP API — used by the coding agent to send plans and poll for user actions. |
 
 ## 📁 Project Structure
 
 ```
-code-explainer/
+brix/
 ├── 📄 SKILL.md                      # AI agent skill instructions
 ├── 🔧 setup.sh                      # One-command setup script
 ├── 📂 scripts/
-│   ├── 📡 explainer.sh              # HTTP API helper for the coding agent
+│   ├── 📡 brix.sh              # HTTP API helper for the coding agent
 │   ├── 🐍 tts_server.py             # Persistent TTS server (Kokoro-82M)
 │   ├── 🎙️ podcast.py                # Podcast mode audio generator
 │   └── 🔄 reinstall-extension.sh    # Quick extension rebuild

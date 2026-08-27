@@ -8,8 +8,8 @@ import type { Walkthrough } from "./walkthrough";
 import type { AgentMessage, ExtensionMessage, UserActionMessage } from "./types";
 import type { WalkthroughStorage } from "./storage";
 
-const PORT_FILE = path.join(os.homedir(), ".claude-explainer-port");
-const TOKEN_FILE = path.join(os.homedir(), ".claude-explainer-token");
+const PORT_FILE = path.join(os.homedir(), ".claude-brix-port");
+const TOKEN_FILE = path.join(os.homedir(), ".claude-brix-token");
 const MAX_BODY_SIZE = 1024 * 1024; // 1MB
 const MAX_LONG_POLL_TIMEOUT = 120_000; // 2 minutes
 
@@ -21,9 +21,16 @@ const VALID_AGENT_MESSAGE_TYPES = new Set([
 	"goto",
 	"resume",
 	"stop",
+	"raise_decision",
+	"resolve_decision",
+	"post_update",
+	"watch_task",
+	"end_task",
 ]);
 
-export class ExplainerServer {
+const VALID_FEED_KINDS = new Set(["finding", "answer", "status", "progress", "info"]);
+
+export class BrixServer {
 	private httpServer: http.Server;
 	private wss: WebSocketServer;
 	private walkthrough: Walkthrough;
@@ -86,6 +93,19 @@ export class ExplainerServer {
 		this.broadcastToClients(action);
 	}
 
+	/**
+	 * Queue an interval status request for a watched task.
+	 * Deduped: if one for this task is already pending (agent hasn't polled yet),
+	 * don't stack another — a busy agent should find at most one nudge per task.
+	 */
+	queueStatusRequest(taskId: string, title: string): void {
+		const alreadyPending = this.pendingActions.some(
+			(a) => a.action === "status_request" && a.taskId === taskId,
+		);
+		if (alreadyPending) return;
+		this.queueAction({ type: "user_action", action: "status_request", taskId, title });
+	}
+
 	/** Send state to all connected WS clients */
 	broadcastState(): void {
 		const state = this.walkthrough.getState();
@@ -141,6 +161,12 @@ export class ExplainerServer {
 			res.end(JSON.stringify({ status: "ok" }));
 		} else if (req.method === "GET" && url.pathname === "/api/state") {
 			this.handleGetState(res);
+		} else if (req.method === "GET" && url.pathname === "/api/validity") {
+			res.writeHead(200);
+			res.end(JSON.stringify(this.validityProvider?.() ?? { overall: "unknown" }));
+		} else if (req.method === "GET" && url.pathname === "/api/decisions") {
+			res.writeHead(200);
+			res.end(JSON.stringify({ decisions: this.decisionsProvider?.() ?? [] }));
 		} else if (req.method === "GET" && url.pathname === "/api/actions") {
 			const rawTimeout = parseInt(url.searchParams.get("timeout") || "30", 10) * 1000;
 			const timeout = Math.min(Math.max(rawTimeout, 1000), MAX_LONG_POLL_TIMEOUT);
@@ -325,12 +351,12 @@ export class ExplainerServer {
 			try {
 				const msg = JSON.parse(data.toString());
 				if (!this.validateAgentMessage(msg)) {
-					console.error("[code-explainer] Invalid WS message format");
+					console.error("[brix] Invalid WS message format");
 					return;
 				}
 				this.handleAgentMessage(msg as AgentMessage);
 			} catch (err) {
-				console.error("[code-explainer] Invalid WS message:", err);
+				console.error("[brix] Invalid WS message:", err);
 			}
 		});
 
@@ -363,6 +389,33 @@ export class ExplainerServer {
 			case "resume":
 			case "stop":
 				return true;
+			case "raise_decision": {
+				const d = m.decision as Record<string, unknown> | undefined;
+				return (
+					!!d &&
+					typeof d === "object" &&
+					typeof d.id === "string" &&
+					typeof d.title === "string" &&
+					typeof d.context === "string" &&
+					Array.isArray(d.options)
+				);
+			}
+			case "resolve_decision":
+				return typeof m.id === "string";
+			case "post_update": {
+				const item = m.item as Record<string, unknown> | undefined;
+				return (
+					!!item &&
+					typeof item === "object" &&
+					typeof item.kind === "string" &&
+					VALID_FEED_KINDS.has(item.kind) &&
+					typeof item.title === "string"
+				);
+			}
+			case "watch_task":
+				return typeof m.id === "string" && typeof m.title === "string";
+			case "end_task":
+				return typeof m.id === "string";
 			default:
 				return false;
 		}
@@ -371,9 +424,21 @@ export class ExplainerServer {
 	// ── Message dispatch ──
 
 	private onAgentMessage?: (msg: AgentMessage) => void;
+	private decisionsProvider?: () => unknown[];
+	private validityProvider?: () => unknown;
 
 	setMessageHandler(handler: (msg: AgentMessage) => void): void {
 		this.onAgentMessage = handler;
+	}
+
+	/** Register a callback that returns the current decision list for GET /api/decisions */
+	setDecisionsProvider(provider: () => unknown[]): void {
+		this.decisionsProvider = provider;
+	}
+
+	/** Register a callback returning walkthrough freshness for GET /api/validity */
+	setValidityProvider(provider: () => unknown): void {
+		this.validityProvider = provider;
 	}
 
 	private handleAgentMessage(msg: AgentMessage): void {

@@ -3,7 +3,7 @@ import type { ToWebviewMessage, FromWebviewMessage } from "./types";
 import type { WalkthroughState } from "./walkthrough";
 
 export class SidebarProvider implements vscode.WebviewViewProvider {
-	public static readonly viewType = "codeExplainer.sidebar";
+	public static readonly viewType = "brix.sidebar";
 
 	private view?: vscode.WebviewView;
 	private onMessage?: (msg: FromWebviewMessage) => void | Promise<void>;
@@ -50,7 +50,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 			this.view.show?.(true);
 		} else {
 			// If webview isn't resolved yet, open the sidebar view
-			vscode.commands.executeCommand("codeExplainer.sidebar.focus");
+			vscode.commands.executeCommand("brix.sidebar.focus");
 		}
 	}
 
@@ -130,9 +130,28 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 		});
 	}
 
+	/** Push the distilled transcript feed to the webview. */
+	sendFeed(items: import("./types").FeedItem[]): void {
+		this.postMessage({ type: "feed", items });
+	}
+
+	/** Push the decision list to the webview and update the view badge. */
+	sendDecisions(decisions: import("./types").Decision[]): void {
+		this.postMessage({ type: "decisions", decisions });
+		const open = decisions.filter((d) => d.status === "open").length;
+		if (this.view) {
+			this.view.badge = open > 0
+				? { value: open, tooltip: `${open} decision${open === 1 ? "" : "s"} waiting on you` }
+				: undefined;
+		}
+	}
+
 	private getHtml(webview: vscode.Webview): string {
 		const scriptUri = webview.asWebviewUri(
 			vscode.Uri.joinPath(this.extensionUri, "media", "sidebar.js"),
+		);
+		const audioUri = webview.asWebviewUri(
+			vscode.Uri.joinPath(this.extensionUri, "media", "audio-player.js"),
 		);
 		const styleUri = webview.asWebviewUri(
 			vscode.Uri.joinPath(this.extensionUri, "media", "sidebar.css"),
@@ -147,22 +166,44 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 		content="default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<link rel="stylesheet" href="${styleUri}">
-	<title>Code Explainer</title>
+	<title>Brix</title>
 </head>
 <body>
+	<div id="decisions-section" style="display:none;">
+		<div class="decisions-header">
+			<span class="decisions-label">WAITING ON YOU</span>
+			<span id="decisions-count" class="decisions-count"></span>
+			<button id="decisions-expand" class="icon-btn decisions-expand" title="Open all decisions in editor">
+				<svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
+					<path d="M9 1v1.5h3.44L6.22 8.72l1.06 1.06L13.5 3.56V7H15V1H9z"/>
+					<path d="M12.5 13.5h-9v-9H8V3H3.5A1.5 1.5 0 002 4.5v9A1.5 1.5 0 003.5 15h9a1.5 1.5 0 001.5-1.5V9h-1.5v4.5z"/>
+				</svg>
+			</button>
+		</div>
+		<div id="decisions-list"></div>
+	</div>
+
+	<div id="feed-section" style="display:none;">
+		<div class="feed-header">
+			<span class="feed-label">UPDATES</span>
+			<button id="feed-clear" class="feed-clear" title="Clear updates">clear</button>
+		</div>
+		<div id="feed-list"></div>
+	</div>
+
 	<div id="idle-view">
 		<div class="idle-header">
-			<span class="idle-header-label">CODE EXPLAINER</span>
+			<span class="idle-header-label">BRIX</span>
 		</div>
 		<div class="idle-hero">
 			<svg class="idle-icon" width="32" height="32" viewBox="0 0 16 16" fill="currentColor" opacity="0.4">
 				<path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 12.5a5.5 5.5 0 110-11 5.5 5.5 0 010 11zM6.5 5v6l5-3-5-3z"/>
 			</svg>
 			<p class="idle-text">No walkthrough loaded</p>
-			<p class="idle-hint">Run <code>/explainer</code> in your coding agent to generate one</p>
+			<p class="idle-hint">Run <code>/brix</code> in your coding agent to generate one</p>
 		</div>
 		<div id="saved-list-section" style="display:none;">
-			<h3 class="saved-list-title">Saved Walkthroughs</h3>
+			<h3 class="saved-list-title">Recent walkthroughs</h3>
 			<ul id="saved-list"></ul>
 		</div>
 	</div>
@@ -170,8 +211,13 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 	<div id="active-view" style="display:none;">
 		<div class="sticky-top">
 			<div class="header">
-				<span class="header-label">CODE EXPLAINER</span>
+				<span class="header-label">BRIX</span>
 				<div class="header-actions">
+					<button id="btn-theater" class="icon-btn" title="Open theater view (editor + outline + controls)">
+						<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+							<path d="M1.5 2h13A1.5 1.5 0 0116 3.5v9a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 010 12.5v-9A1.5 1.5 0 011.5 2zm0 1.5v9H10v-9H1.5zm10 0v4H14.5v-4h-3zm3 5.5h-3v3.5h3V9z"/>
+						</svg>
+					</button>
 					<button id="btn-save" class="icon-btn" title="Save Walkthrough">
 						<svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
 							<path d="M13.354 4.354l-3.708-3.708A.5.5 0 009.293.5H2.5A1.5 1.5 0 001 2v12a1.5 1.5 0 001.5 1.5h11A1.5 1.5 0 0015 14V4.707a.5.5 0 00-.146-.353zM12 14H4V9h8v5zm1-7H3V2h6.293L13 5.707V7z"/>
@@ -185,6 +231,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 				</div>
 			</div>
 			<h2 id="walkthrough-title"></h2>
+				<div id="validity-banner" class="validity-banner" style="display:none;"></div>
 
 			<div class="now-playing">
 				<div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
@@ -262,6 +309,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 		</div>
 	</div>
 
+	<script nonce="${nonce}" src="${audioUri}"></script>
 	<script nonce="${nonce}" src="${scriptUri}"></script>
 </body>
 </html>`;

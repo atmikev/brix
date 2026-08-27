@@ -1,0 +1,1051 @@
+<title>Navigator</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:ital,wght@0,400;0,500;0,700;1,400&display=swap">
+<style>
+  /* Dark-first token system. Bare :root = dark; light overrides below. */
+  :root {
+    --bg: #0e1218;          /* window ground */
+    --panel: #141924;       /* sidebar / panels */
+    --panel-2: #1a2130;     /* raised chrome: tabs, cards */
+    --editor: #10151e;      /* code surface */
+    --line: #232c3d;
+    --line-soft: #1b2331;
+    --text: #d3dbe8;
+    --muted: #8794a8;
+    --faint: #55627a;
+    --accent: #e2a144;      /* reading-lamp amber */
+    --accent-soft: rgba(226, 161, 68, 0.13);
+    --accent-line: rgba(226, 161, 68, 0.45);
+    --accent-text: #10151e;
+    --ok: #58b586;
+    --ok-soft: rgba(88, 181, 134, 0.13);
+    --danger: #d9705c;
+    --danger-soft: rgba(217, 112, 92, 0.13);
+    --code-add: rgba(88, 181, 134, 0.07);
+    --code-del: rgba(217, 112, 92, 0.07);
+    --syn-k: #7fa1d8;
+    --syn-s: #9dc294;
+    --syn-t: #56b3ad;
+    --syn-n: #d0946f;
+    --syn-c: #5c6a82;
+    --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    --focus: #7fa1d8;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #e8ebf0;
+      --panel: #f3f5f8;
+      --panel-2: #ffffff;
+      --editor: #fdfdfc;
+      --line: #d3d9e3;
+      --line-soft: #e2e6ed;
+      --text: #253044;
+      --muted: #5c6a80;
+      --faint: #97a2b4;
+      --accent: #a86f16;
+      --accent-soft: rgba(168, 111, 22, 0.12);
+      --accent-line: rgba(168, 111, 22, 0.45);
+      --accent-text: #ffffff;
+      --ok: #257a51;
+      --ok-soft: rgba(37, 122, 81, 0.11);
+      --danger: #b3452f;
+      --danger-soft: rgba(179, 69, 47, 0.10);
+      --code-add: rgba(37, 122, 81, 0.07);
+      --code-del: rgba(179, 69, 47, 0.07);
+      --syn-k: #3760a8;
+      --syn-s: #3f7d4c;
+      --syn-t: #1d7f79;
+      --syn-n: #9c5a2d;
+      --syn-c: #94a0b2;
+      --shadow: 0 10px 30px rgba(37, 48, 68, 0.10);
+      --focus: #3760a8;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #e8ebf0;
+    --panel: #f3f5f8;
+    --panel-2: #ffffff;
+    --editor: #fdfdfc;
+    --line: #d3d9e3;
+    --line-soft: #e2e6ed;
+    --text: #253044;
+    --muted: #5c6a80;
+    --faint: #97a2b4;
+    --accent: #a86f16;
+    --accent-soft: rgba(168, 111, 22, 0.12);
+    --accent-line: rgba(168, 111, 22, 0.45);
+    --accent-text: #ffffff;
+    --ok: #257a51;
+    --ok-soft: rgba(37, 122, 81, 0.11);
+    --danger: #b3452f;
+    --danger-soft: rgba(179, 69, 47, 0.10);
+    --code-add: rgba(37, 122, 81, 0.07);
+    --code-del: rgba(179, 69, 47, 0.07);
+    --syn-k: #3760a8;
+    --syn-s: #3f7d4c;
+    --syn-t: #1d7f79;
+    --syn-n: #9c5a2d;
+    --syn-c: #94a0b2;
+    --shadow: 0 10px 30px rgba(37, 48, 68, 0.10);
+    --focus: #3760a8;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Public Sans", system-ui, -apple-system, sans-serif;
+    font-size: 13px; line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; background: none; border: none; }
+  button:focus-visible, input:focus-visible, summary:focus-visible, [tabindex]:focus-visible {
+    outline: 1.5px solid var(--focus); outline-offset: -1.5px;
+  }
+  .mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+  kbd {
+    font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--muted);
+    border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px;
+    padding: 0 5px; background: var(--panel-2);
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 5px; border: 2px solid transparent; background-clip: content-box; }
+  ::-webkit-scrollbar-thumb:hover { background-color: var(--faint); background-clip: content-box; }
+  ::-webkit-scrollbar-track { background: transparent; }
+
+  .app { height: 100vh; display: flex; flex-direction: column; }
+
+  /* ========== Title bar ========== */
+  .titlebar {
+    flex: none; height: 38px; display: grid;
+    grid-template-columns: 1fr auto 1fr; align-items: center;
+    padding: 0 14px; background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  .wordmark {
+    justify-self: start; display: flex; align-items: center; gap: 8px;
+    font-family: "Bricolage Grotesque", sans-serif; font-weight: 700;
+    font-size: 13.5px; letter-spacing: -0.01em;
+  }
+  .wordmark .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .wordmark .ver { font-family: "JetBrains Mono", monospace; font-size: 10px; font-weight: 400; color: var(--faint); }
+  .session-title {
+    font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 48vw;
+  }
+  .session-title b { color: var(--text); font-weight: 500; }
+  .title-right { justify-self: end; display: flex; align-items: center; gap: 12px; }
+  .sync { display: flex; align-items: center; gap: 6px; font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--muted); }
+  .sync .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+  @media (prefers-reduced-motion: no-preference) {
+    .sync .pulse { animation: pulse 2.4s ease-in-out infinite; }
+    @keyframes pulse { 50% { opacity: 0.3; } }
+  }
+  .mic-ghost { color: var(--faint); font-size: 13px; padding: 4px 6px; border-radius: 5px; }
+  .mic-ghost:hover { background: var(--panel-2); }
+
+  /* ========== Workbench ========== */
+  .workbench { flex: 1; min-height: 0; display: flex; }
+
+  /* Activity bar */
+  .activitybar {
+    flex: none; width: 46px; background: var(--panel);
+    border-right: 1px solid var(--line);
+    display: flex; flex-direction: column; align-items: center; padding: 6px 0; gap: 2px;
+  }
+  .act {
+    position: relative; width: 38px; height: 38px; border-radius: 7px;
+    display: flex; align-items: center; justify-content: center; color: var(--faint);
+  }
+  .act:hover { color: var(--muted); background: var(--panel-2); }
+  .act[aria-selected="true"] { color: var(--accent); background: var(--accent-soft); }
+  .act svg { width: 19px; height: 19px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+  .act .n {
+    position: absolute; top: 3px; right: 3px; min-width: 15px; height: 15px; padding: 0 4px;
+    border-radius: 8px; background: var(--danger); color: #fff;
+    font-family: "JetBrains Mono", monospace; font-size: 9.5px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .act .n[data-n="0"] { display: none; }
+  .act-spacer { flex: 1; }
+
+  /* Sidebar */
+  .sidebar {
+    flex: none; width: 288px; background: var(--panel); border-right: 1px solid var(--line);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  .sb-head {
+    flex: none; padding: 10px 14px 8px;
+    font-family: "JetBrains Mono", monospace; font-size: 10px; font-weight: 700;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted);
+    display: flex; align-items: baseline; gap: 8px;
+  }
+  .sb-head .sub { font-weight: 400; color: var(--faint); letter-spacing: 0.04em; text-transform: none; margin-left: auto; }
+  .sb-body { flex: 1; overflow-y: auto; padding: 2px 8px 12px; }
+  .sb-section { display: none; height: 100%; flex-direction: column; min-height: 0; }
+  .sb-section.active { display: flex; }
+
+  /* chapters (walkthrough sidebar) */
+  .chapter {
+    width: 100%; text-align: left; display: flex; gap: 10px; align-items: flex-start;
+    padding: 8px 9px; border-radius: 7px; border: 1px solid transparent; margin-bottom: 2px;
+    transition: background 120ms ease;
+  }
+  .chapter:hover { background: var(--panel-2); }
+  .chapter .num {
+    font-family: "JetBrains Mono", monospace; font-size: 11px; font-weight: 700;
+    color: var(--faint); padding-top: 2px; width: 12px; flex: none;
+  }
+  .chapter .t { font-weight: 600; font-size: 12.5px; line-height: 1.35; }
+  .chapter .m { font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--muted); margin-top: 3px; }
+  .chapter.current { background: var(--accent-soft); border-color: var(--accent-line); }
+  .chapter.current .num { color: var(--accent); }
+  .chapter.done .t { color: var(--muted); }
+  .chapter.done .num::after { content: "✓"; color: var(--ok); margin-left: 2px; }
+  .skim-tag {
+    font-family: "JetBrains Mono", monospace; font-size: 9px; color: var(--faint);
+    border: 1px dashed var(--line); border-radius: 3px; padding: 0 4px; margin-left: 6px;
+    vertical-align: 1px; letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .sb-progress {
+    flex: none; margin: 8px 9px 2px; padding-top: 10px; border-top: 1px solid var(--line-soft);
+    font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--muted);
+  }
+  .sb-progress .track { height: 3px; border-radius: 2px; background: var(--line-soft); margin-top: 6px; overflow: hidden; }
+  .sb-progress .fill { height: 100%; background: var(--accent); width: 0%; transition: width 200ms ease; }
+
+  /* decisions sidebar list */
+  .d-item {
+    width: 100%; text-align: left; display: flex; gap: 9px; align-items: flex-start;
+    padding: 8px 9px; border-radius: 7px; margin-bottom: 2px;
+  }
+  .d-item:hover { background: var(--panel-2); }
+  .d-item .st { flex: none; width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; background: var(--danger); }
+  .d-item.ok .st { background: var(--ok); }
+  .d-item .q { font-size: 12.5px; font-weight: 600; line-height: 1.35; }
+  .d-item.ok .q { color: var(--muted); font-weight: 500; }
+  .d-item .w { font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--faint); margin-top: 2px; }
+
+  /* transcript sidebar filters */
+  .filter {
+    width: 100%; text-align: left; display: flex; align-items: center; gap: 9px;
+    padding: 7px 9px; border-radius: 7px; margin-bottom: 2px; color: var(--muted); font-weight: 500;
+  }
+  .filter:hover { background: var(--panel-2); }
+  .filter .sw { flex: none; width: 9px; height: 9px; border-radius: 3px; border: 1.5px solid var(--faint); }
+  .filter[aria-pressed="true"] { color: var(--text); }
+  .filter[aria-pressed="true"] .sw { background: var(--accent); border-color: var(--accent); }
+  .filter .ct { margin-left: auto; font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--faint); }
+
+  /* ========== Main column ========== */
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--editor); }
+
+  .tabstrip {
+    flex: none; display: flex; align-items: stretch; height: 35px;
+    background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  .etab {
+    display: flex; align-items: center; gap: 8px; padding: 0 14px;
+    font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--muted);
+    border-right: 1px solid var(--line); position: relative; background: var(--panel);
+  }
+  .etab.active { background: var(--editor); color: var(--text); }
+  .etab.active::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 2px; background: var(--accent); }
+  .etab .mod { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+  .etab .cnt { color: var(--danger); font-weight: 700; }
+  .breadcrumbs {
+    flex: none; display: flex; align-items: center; gap: 7px; padding: 5px 16px;
+    font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--faint);
+    border-bottom: 1px solid var(--line-soft); background: var(--editor);
+  }
+  .breadcrumbs .sep { opacity: 0.55; }
+  .breadcrumbs .leaf { color: var(--muted); }
+
+  .content { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .view { display: none; flex: 1; min-height: 0; }
+  .view.active { display: flex; flex-direction: column; }
+
+  /* ---- Walkthrough editor ---- */
+  .editor-wrap { flex: 1; min-height: 0; display: flex; }
+  .code {
+    flex: 1; overflow: auto; padding: 12px 0;
+    font-family: "JetBrains Mono", monospace; font-size: 12.5px; line-height: 1.65;
+  }
+  .cl { display: flex; white-space: pre; padding-right: 16px; }
+  .cl .gut {
+    flex: none; width: 56px; text-align: right; padding-right: 18px;
+    color: var(--faint); user-select: none; font-variant-numeric: tabular-nums; font-size: 11.5px;
+  }
+  .cl .sign { flex: none; width: 18px; user-select: none; color: var(--faint); }
+  .cl.add { background: var(--code-add); } .cl.add .sign { color: var(--ok); }
+  .cl.del { background: var(--code-del); } .cl.del .sign { color: var(--danger); }
+  .cl.hl { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+  .cl.hl .gut { color: var(--accent); font-weight: 700; }
+  .tok-k { color: var(--syn-k); }
+  .tok-s { color: var(--syn-s); }
+  .tok-t { color: var(--syn-t); }
+  .tok-n { color: var(--syn-n); }
+  .tok-c { color: var(--syn-c); font-style: italic; }
+
+  .minimap {
+    flex: none; width: 78px; border-left: 1px solid var(--line-soft);
+    padding: 14px 12px; background: var(--editor);
+  }
+  .mm-line { height: 3px; border-radius: 1px; margin-bottom: 3px; background: var(--line); }
+  .mm-line.add { background: color-mix(in srgb, var(--ok) 45%, var(--line)); }
+  .mm-line.del { background: color-mix(in srgb, var(--danger) 45%, var(--line)); }
+  .mm-line.hl { background: var(--accent); }
+
+  .askbar {
+    flex: none; display: flex; gap: 8px; padding: 9px 14px;
+    border-top: 1px solid var(--line); background: var(--panel);
+  }
+  .askbar input {
+    flex: 1; background: var(--editor); color: var(--text);
+    border: 1px solid var(--line); border-radius: 6px; padding: 7px 12px;
+    font: inherit; font-size: 12.5px;
+  }
+  .askbar input::placeholder { color: var(--faint); }
+  .btn {
+    border: 1px solid var(--line); background: var(--panel-2);
+    border-radius: 6px; padding: 6px 14px; font-weight: 600; font-size: 12.5px;
+    transition: border-color 120ms ease;
+  }
+  .btn:hover { border-color: var(--faint); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  .btn.primary:hover { filter: brightness(1.06); }
+
+  /* ---- Narration panel ---- */
+  .panel {
+    flex: none; border-top: 1px solid var(--line); background: var(--panel);
+    display: flex; flex-direction: column;
+  }
+  .panel-head {
+    display: flex; align-items: center; gap: 14px; padding: 6px 14px 0;
+  }
+  .panel-tab {
+    font-family: "JetBrains Mono", monospace; font-size: 10px; font-weight: 700;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--text);
+    border-bottom: 1.5px solid var(--accent); padding-bottom: 5px;
+  }
+  .panel-keys { margin-left: auto; display: flex; gap: 10px; align-items: center; font-size: 10.5px; color: var(--faint); }
+  .panel-body { display: flex; align-items: center; gap: 14px; padding: 10px 14px 12px; }
+  .play {
+    width: 40px; height: 40px; border-radius: 50%; flex: none;
+    background: var(--accent); color: var(--accent-text); font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+    transition: filter 120ms ease;
+  }
+  .play:hover { filter: brightness(1.08); }
+  .step-btn { color: var(--muted); font-size: 14px; padding: 4px 6px; border-radius: 5px; }
+  .step-btn:hover { background: var(--panel-2); color: var(--text); }
+  .caption-wrap { flex: 1; min-width: 0; }
+  .caption-eyebrow {
+    font-family: "JetBrains Mono", monospace; font-size: 9.5px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--accent); display: flex; align-items: center; gap: 8px;
+  }
+  .eq { display: inline-flex; align-items: flex-end; gap: 2px; height: 9px; }
+  .eq i { width: 3px; background: var(--accent); border-radius: 1px; height: 3px; }
+  @media (prefers-reduced-motion: no-preference) {
+    .speaking .eq i { animation: eq 0.9s ease-in-out infinite; }
+    .speaking .eq i:nth-child(2) { animation-delay: 0.2s; }
+    .speaking .eq i:nth-child(3) { animation-delay: 0.45s; }
+    @keyframes eq { 50% { height: 9px; } }
+  }
+  .caption { font-size: 13.5px; margin-top: 3px; max-width: 74ch; }
+  .hold {
+    flex: none; border-radius: 999px; padding: 8px 18px; font-weight: 700; font-size: 12.5px;
+    border: 1.5px solid var(--accent); color: var(--accent); background: none;
+    transition: background 120ms ease, color 120ms ease;
+  }
+  .hold.holding { background: var(--accent); color: var(--accent-text); }
+
+  /* ---- Decisions / Transcript document views ---- */
+  .doc { flex: 1; overflow-y: auto; }
+  .doc-inner { max-width: 760px; margin: 0 auto; padding: 28px 28px 80px; }
+  .doc h1 {
+    font-family: "Bricolage Grotesque", sans-serif; font-size: 21px; font-weight: 700;
+    letter-spacing: -0.01em; margin: 0 0 4px; text-wrap: balance;
+  }
+  .doc .sub { color: var(--muted); margin: 0 0 22px; max-width: 62ch; font-size: 13px; }
+
+  .card {
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
+    padding: 16px 18px; margin-bottom: 12px; box-shadow: var(--shadow);
+  }
+  .card-meta {
+    display: flex; align-items: center; gap: 10px;
+    font-family: "JetBrains Mono", monospace; font-size: 10px; color: var(--faint);
+  }
+  .pill {
+    display: inline-block; font-family: "JetBrains Mono", monospace; font-size: 9.5px;
+    font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+    border-radius: 4px; padding: 2px 7px;
+  }
+  .pill.blocking, .pill.decision { background: var(--danger-soft); color: var(--danger); }
+  .pill.finding { background: var(--accent-soft); color: var(--accent); }
+  .pill.answer, .pill.resolved { background: var(--ok-soft); color: var(--ok); }
+  .card h3 { margin: 9px 0 6px; font-size: 15.5px; font-weight: 700; text-wrap: balance; }
+  .card .ctx { color: var(--muted); margin: 0 0 12px; max-width: 64ch; }
+  .options { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .opt {
+    border: 1px solid var(--line); background: var(--panel); border-radius: 6px;
+    padding: 6px 13px; font-weight: 600; font-size: 12.5px;
+    transition: border-color 120ms ease;
+  }
+  .opt:hover { border-color: var(--accent); }
+  .reply { display: flex; gap: 8px; }
+  .reply input {
+    flex: 1; background: var(--editor); color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 7px 12px; font: inherit; font-size: 12.5px;
+  }
+  .reply input::placeholder { color: var(--faint); }
+  .card.resolved-card { opacity: 0.68; box-shadow: none; }
+  .card.resolved-card h3 { color: var(--muted); }
+  .resolution { color: var(--ok); font-weight: 600; font-size: 12.5px; margin: 4px 0 0; }
+
+  .t-card p { margin: 6px 0 0; max-width: 66ch; }
+  .t-card p + p { margin-top: 8px; }
+  .t-card .loc { font-family: "JetBrains Mono", monospace; font-size: 11.5px; color: var(--muted); }
+  .t-link { color: var(--accent); font-weight: 600; text-decoration: none; }
+  .t-link:hover { text-decoration: underline; }
+  details.steps { margin: 2px 0 12px; }
+  details.steps summary {
+    list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px;
+    font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--faint);
+    padding: 2px 4px; border-radius: 5px;
+  }
+  details.steps summary:hover { color: var(--muted); }
+  details.steps summary::before { content: "▸"; font-size: 9px; }
+  details.steps[open] summary::before { content: "▾"; }
+  details.steps summary .rule { flex: 1; height: 1px; background: var(--line-soft); }
+  details.steps .step {
+    font-family: "JetBrains Mono", monospace; font-size: 11px; color: var(--muted);
+    padding: 2px 4px 2px 22px;
+  }
+  .hidden { display: none !important; }
+
+  /* ========== Status bar ========== */
+  .statusbar {
+    flex: none; height: 24px; display: flex; align-items: stretch;
+    background: var(--panel); border-top: 1px solid var(--line);
+    font-family: "JetBrains Mono", monospace; font-size: 10.5px; color: var(--muted);
+  }
+  .seg { display: flex; align-items: center; gap: 6px; padding: 0 11px; }
+  .seg .ok-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
+  .seg.add { color: var(--ok); } .seg.del { color: var(--danger); }
+  .seg-btn:hover { background: var(--panel-2); color: var(--text); }
+  .statusbar .grow { flex: 1; }
+  .statusbar.narrating .seg-state { background: var(--accent); color: var(--accent-text); font-weight: 700; }
+
+  @media (max-width: 900px) {
+    .sidebar { display: none; }
+    .minimap { display: none; }
+    .session-title { display: none; }
+  }
+</style>
+
+<div class="app">
+  <!-- Title bar -->
+  <header class="titlebar">
+    <div class="wordmark"><span class="dot"></span>Navigator <span class="ver">0.1.0</span></div>
+    <div class="session-title"><b>Add rate limiting to the public API</b> — session #47 · claude-fable-5</div>
+    <div class="title-right">
+      <span class="sync"><span class="pulse"></span>VS Code · synced</span>
+      <button class="mic-ghost" title="Voice input — coming soon">🎤</button>
+    </div>
+  </header>
+
+  <div class="workbench">
+    <!-- Activity bar -->
+    <nav class="activitybar" role="tablist" aria-label="Views">
+      <button class="act" role="tab" aria-selected="true" data-view="walkthrough" title="Walkthrough">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M10 8.5 15.5 12 10 15.5z"/></svg>
+      </button>
+      <button class="act" role="tab" aria-selected="false" data-view="decisions" title="Decisions">
+        <svg viewBox="0 0 24 24"><path d="M3 13h5l2 3h4l2-3h5"/><path d="M5 5h14l2 8v6H3v-6z"/></svg>
+        <span class="n" id="decision-badge">2</span>
+      </button>
+      <button class="act" role="tab" aria-selected="false" data-view="transcript" title="Transcript">
+        <svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>
+      </button>
+      <div class="act-spacer"></div>
+      <button class="act" title="Settings (mockup)">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.5-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.5 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.5 2.4-1a7 7 0 0 0 2 1.2L10 21h4l.5-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.5-2-1.5c.1-.4.1-.8.1-1.2z"/></svg>
+      </button>
+    </nav>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <!-- walkthrough: chapters -->
+      <section class="sb-section active" id="sb-walkthrough">
+        <div class="sb-head">Chapters <span class="sub">ordered by importance</span></div>
+        <div class="sb-body" id="chapters"></div>
+        <div class="sb-progress">
+          <span id="progress-label"></span>
+          <div class="track"><div class="fill" id="progress-fill"></div></div>
+        </div>
+      </section>
+      <!-- decisions: queue list -->
+      <section class="sb-section" id="sb-decisions">
+        <div class="sb-head">Queue</div>
+        <div class="sb-body" id="d-list"></div>
+      </section>
+      <!-- transcript: filters -->
+      <section class="sb-section" id="sb-transcript">
+        <div class="sb-head">Show</div>
+        <div class="sb-body" id="filters"></div>
+      </section>
+    </aside>
+
+    <!-- Main -->
+    <main class="main">
+      <div class="tabstrip" id="tabstrip"></div>
+      <div class="breadcrumbs" id="breadcrumbs"></div>
+
+      <div class="content">
+        <!-- Walkthrough -->
+        <section class="view active" id="view-walkthrough">
+          <div class="editor-wrap">
+            <div class="code" id="code"></div>
+            <div class="minimap" id="minimap" aria-hidden="true"></div>
+          </div>
+          <div class="askbar">
+            <input type="text" id="ask" placeholder="Ask about the highlighted lines… narration pauses while you type">
+            <button class="btn primary">Ask</button>
+          </div>
+        </section>
+
+        <!-- Decisions -->
+        <section class="view" id="view-decisions">
+          <div class="doc"><div class="doc-inner">
+            <h1>Waiting on you</h1>
+            <p class="sub">Every question the agent is blocked on, in one place. Nothing here is buried in terminal scrollback.</p>
+            <div id="decision-list"></div>
+          </div></div>
+        </section>
+
+        <!-- Transcript -->
+        <section class="view" id="view-transcript">
+          <div class="doc"><div class="doc-inner">
+            <h1>What actually matters</h1>
+            <p class="sub">Answers, findings, and decisions in full. Process narration is collapsed — it happened, you just don't have to read it.</p>
+            <div id="feed"></div>
+          </div></div>
+        </section>
+      </div>
+
+      <!-- Narration panel (walkthrough only) -->
+      <div class="panel" id="panel">
+        <div class="panel-head">
+          <span class="panel-tab">Narration</span>
+          <div class="panel-keys">
+            <span><kbd>space</kbd> play</span>
+            <span><kbd>←</kbd><kbd>→</kbd> segment</span>
+            <span><kbd>h</kbd> hold</span>
+          </div>
+        </div>
+        <div class="panel-body" id="narration">
+          <button class="play" id="play" aria-label="Play narration">▶</button>
+          <button class="step-btn" id="prev" aria-label="Previous segment">⏮</button>
+          <button class="step-btn" id="next" aria-label="Next segment">⏭</button>
+          <div class="caption-wrap">
+            <div class="caption-eyebrow"><span class="eq"><i></i><i></i><i></i></span><span id="eyebrow">Paused</span></div>
+            <div class="caption" id="caption"></div>
+          </div>
+          <button class="hold" id="hold">Still reading — hold on</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Status bar -->
+  <footer class="statusbar" id="statusbar">
+    <div class="seg seg-state" id="seg-state">⏸ paused</div>
+    <div class="seg"><span class="ok-dot"></span>VS Code following</div>
+    <div class="seg">⎇ feat/rate-limit</div>
+    <div class="seg add">+131</div>
+    <div class="seg del">−7</div>
+    <div class="grow"></div>
+    <div class="seg" id="seg-pos"></div>
+    <button class="seg seg-btn" id="speed" title="Narration speed">1.0×</button>
+    <div class="seg">TypeScript</div>
+  </footer>
+</div>
+
+<script>
+// ------------------------------------------------------------------
+// Fake session data: "Add rate limiting to the public API"
+// ------------------------------------------------------------------
+const CHAPTERS = [
+  {
+    title: "The heart of it: the token bucket",
+    file: "src/middleware/rateLimit.ts",
+    symbol: "rateLimit()",
+    meta: "+42 lines · new file",
+    code: [
+      ["add", 'import type { Request, Response, NextFunction } from "express";'],
+      ["add", ""],
+      ["add", "interface Bucket { tokens: number; lastRefill: number; }"],
+      ["add", ""],
+      ["add", "const buckets = new Map<string, Bucket>();"],
+      ["add", ""],
+      ["add", "const CAPACITY = 60;        // burst: requests allowed at once"],
+      ["add", "const REFILL_PER_SEC = 1;   // sustained rate"],
+      ["add", ""],
+      ["add", "export function rateLimit(req: Request, res: Response, next: NextFunction) {"],
+      ["add", '  const key = req.apiToken ?? req.ip ?? "unknown";'],
+      ["add", "  const bucket = take(key);"],
+      ["add", "  if (bucket.tokens < 0) return reject(res, bucket);"],
+      ["add", "  next();"],
+      ["add", "}"],
+      ["add", ""],
+      ["add", "function take(key: string): Bucket {"],
+      ["add", "  const now = Date.now();"],
+      ["add", "  const b = buckets.get(key) ?? { tokens: CAPACITY, lastRefill: now };"],
+      ["add", "  const elapsed = (now - b.lastRefill) / 1000;"],
+      ["add", "  b.tokens = Math.min(CAPACITY, b.tokens + elapsed * REFILL_PER_SEC);"],
+      ["add", "  b.lastRefill = now;"],
+      ["add", "  b.tokens -= 1;"],
+      ["add", "  buckets.set(key, b);"],
+      ["add", "  return b;"],
+      ["add", "}"],
+    ],
+    segments: [
+      { hl: [4, 7], caption: "Each client gets a token bucket: sixty requests of burst, refilling one per second. It lives in this in-memory Map — that's the first decision I need from you, but let me show the mechanics first." },
+      { hl: [16, 25], caption: "Refill is lazy — computed from elapsed time whenever a request arrives, instead of a background timer. Nothing to schedule, nothing to clean up." },
+      { hl: [9, 14], caption: "The middleware itself is four lines. Note the key: API token when the client is authenticated, falling back to IP. Rejection happens before any route logic runs." },
+    ],
+  },
+  {
+    title: "Where it hooks in",
+    file: "src/server.ts",
+    symbol: "app.use()",
+    meta: "+3 −0",
+    code: [
+      ["ctx", 'import { createServer } from "./app";'],
+      ["add", 'import { rateLimit } from "./middleware/rateLimit";'],
+      ["ctx", ""],
+      ["ctx", "const app = createServer();"],
+      ["add", ""],
+      ["add", "// Order matters: after auth (so keys resolve), before routes."],
+      ["add", 'app.use("/api", rateLimit);'],
+      ["ctx", ""],
+      ["ctx", "app.listen(PORT, () => {"],
+      ["ctx", "  log.info(`listening on ${PORT}`);"],
+      ["ctx", "});"],
+    ],
+    segments: [
+      { hl: [5, 6], caption: "One mount point. I placed it after auth so the bucket key can be the API token rather than just the IP — that ordering is the part worth double-checking." },
+    ],
+  },
+  {
+    title: "Saying no politely: the 429",
+    file: "src/middleware/rateLimit.ts",
+    symbol: "reject()",
+    meta: "+14 lines",
+    code: [
+      ["add", "function reject(res: Response, bucket: Bucket) {"],
+      ["add", "  const deficit = Math.abs(bucket.tokens);"],
+      ["add", "  const retryAfter = Math.ceil(deficit / REFILL_PER_SEC);"],
+      ["add", ""],
+      ["add", '  res.setHeader("Retry-After", String(retryAfter));'],
+      ["add", '  res.setHeader("X-RateLimit-Remaining", "0");'],
+      ["add", "  res.status(429).json({"],
+      ["add", '    error: "rate_limited",'],
+      ["add", "    retry_after_seconds: retryAfter,"],
+      ["add", "  });"],
+      ["add", "}"],
+    ],
+    segments: [
+      { hl: [4, 9], caption: "Throttled clients get a Retry-After header and a JSON envelope matching your other errors. One catch: your apiClient retries 429s immediately and ignores this header — I flagged it as a finding in the transcript." },
+    ],
+  },
+  {
+    title: "Config & glue",
+    file: "config/default.ts",
+    symbol: "config",
+    meta: "+9 −2 · 2 files",
+    skim: true,
+    code: [
+      ["ctx", "export const config = {"],
+      ["ctx", '  port: env.int("PORT", 3000),'],
+      ["add", "  rateLimit: {"],
+      ["add", '    capacity: env.int("RATE_LIMIT_BURST", 60),'],
+      ["add", '    refillPerSec: env.int("RATE_LIMIT_RPS", 1),'],
+      ["add", "  },"],
+      ["ctx", "};"],
+    ],
+    segments: [
+      { hl: [2, 5], caption: "Just plumbing: the two knobs you saw, exposed as env vars with the same defaults, plus a line in .env.example. Safe to skim." },
+    ],
+  },
+  {
+    title: "The tests",
+    file: "tests/rateLimit.test.ts",
+    symbol: "12 tests",
+    meta: "+63 lines · 12 tests",
+    skim: true,
+    code: [
+      ["add", 'it("returns 429 once the bucket is empty", async () => {'],
+      ["add", '  for (let i = 0; i < 60; i++) await ok(agent.get("/api/ping"));'],
+      ["add", ""],
+      ["add", '  const res = await agent.get("/api/ping");'],
+      ["add", "  expect(res.status).toBe(429);"],
+      ["add", '  expect(res.headers["retry-after"]).toBeDefined();'],
+      ["add", "});"],
+    ],
+    segments: [
+      { hl: [0, 6], caption: "Twelve tests, all passing. This is the one that matters: burst until empty, then assert the 429 and its Retry-After header. The rest cover refill timing and per-key isolation — skimmable." },
+    ],
+  },
+];
+
+const DECISIONS = [
+  {
+    id: "store",
+    blocking: true,
+    q: "Where should the rate-limit state live?",
+    ctx: "The buckets sit in an in-memory Map (chapter 1). Perfect for one process — but prod runs three instances behind the load balancer, so each enforces its own budget and the real limit becomes ~180 req/burst per client.",
+    options: ["In-memory is fine for now", "Redis-backed store", "Sticky sessions at the LB"],
+    waiting: "raised 4 min ago",
+  },
+  {
+    id: "body429",
+    blocking: true,
+    q: "What should the 429 response body be?",
+    ctx: "I used a JSON envelope — { error: \"rate_limited\", retry_after_seconds } — to match your other error responses. But a comment in apiClient.ts says two mobile clients still parse error bodies as plain text.",
+    options: ["JSON envelope", "Plain text", "JSON with a text fallback"],
+    waiting: "raised 1 min ago",
+  },
+  {
+    id: "slowdown",
+    blocking: false,
+    resolved: "You said: remove it. Done — dropped from package.json.",
+    q: "express-slow-down is unused after this change — remove it?",
+    ctx: "It was added in 2024 for a partial throttling attempt that never shipped.",
+    options: [],
+    waiting: "answered",
+  },
+];
+
+const FEED = [
+  { type: "steps", label: "5 process steps", steps: [
+    "Read src/server.ts, src/app.ts",
+    "Searched for existing throttling — found unused express-slow-down",
+    "Read src/lib/apiClient.ts (retry behavior)",
+    "Checked deploy topology in infra/prod.yaml — 3 instances",
+    "Drafted plan: token bucket middleware, keyed by token → IP",
+  ]},
+  { type: "finding", title: "Your client retries 429s instantly — it will fight this limiter",
+    body: 'The retry helper at <span class="mono loc">src/lib/apiClient.ts:88</span> treats 429 like a transient 5xx: three immediate retries, no delay, Retry-After ignored. Ship the limiter as-is and every throttled client instantly burns three more requests.',
+    body2: "Not part of this change, but worth a follow-up task before the limiter goes live." },
+  { type: "decision", ref: "store", title: "Where should the rate-limit state live?" },
+  { type: "steps", label: "14 process steps", steps: [
+    "Created src/middleware/rateLimit.ts",
+    "Edited src/server.ts",
+    "Edited config/default.ts, .env.example",
+    "Wrote tests/rateLimit.test.ts (12 tests)",
+    "Ran tests — 2 failed (fake timers not advancing)",
+    "Fixed timer mock in test setup",
+    "Ran tests — 12 passed",
+    "Ran full suite — 148 passed",
+    "Lint + typecheck — clean",
+    "Removed express-slow-down from package.json",
+    "Regenerated lockfile",
+    "Re-ran full suite — 148 passed",
+    "Built walkthrough chapters",
+    "Prepared this summary",
+  ]},
+  { type: "answer", title: "Done: token-bucket rate limiting on /api",
+    body: "60-request burst, 1 req/s sustained per client (API token, falling back to IP), 429 + Retry-After when empty, two env-var knobs, 12 new tests passing and the full suite green.",
+    body2: 'Worth your eyes: chapters 1–3 in the <a class="t-link" href="#" data-goto="walkthrough">walkthrough</a> (~4 minutes). Chapters 4–5 are glue and tests — skimmable.' },
+  { type: "decision", ref: "body429", title: "What should the 429 response body be?" },
+];
+
+// ------------------------------------------------------------------
+// Tiny syntax highlighter (mockup-grade)
+// ------------------------------------------------------------------
+const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+function hi(raw) {
+  let rest = raw, comment = "";
+  const ci = raw.indexOf("//");
+  if (ci >= 0) { comment = raw.slice(ci); rest = raw.slice(0, ci); }
+  const re = /("[^"]*"|'[^']*'|`[^`]*`)|\b(import|from|export|function|return|const|let|interface|type|if|for|await|async|new|of|it|expect)\b|\b([A-Z][A-Za-z]*)\b|\b(\d+)\b/g;
+  let out = "", last = 0, m;
+  while ((m = re.exec(rest))) {
+    out += esc(rest.slice(last, m.index));
+    if (m[1]) out += '<span class="tok-s">' + esc(m[1]) + "</span>";
+    else if (m[2]) out += '<span class="tok-k">' + m[2] + "</span>";
+    else if (m[3]) out += '<span class="tok-t">' + m[3] + "</span>";
+    else out += '<span class="tok-n">' + m[4] + "</span>";
+    last = re.lastIndex;
+  }
+  out += esc(rest.slice(last));
+  return out + (comment ? '<span class="tok-c">' + esc(comment) + "</span>" : "");
+}
+
+// ------------------------------------------------------------------
+// Walkthrough player
+// ------------------------------------------------------------------
+const SCRIPT = [];
+CHAPTERS.forEach((ch, ci) => ch.segments.forEach((seg, si) => SCRIPT.push({ ci, si })));
+
+let pos = 0, playing = false, holding = false, timer = null, currentView = "walkthrough";
+const SEG_MS = 5200;
+const $ = (id) => document.getElementById(id);
+
+function renderChapters() {
+  const { ci } = SCRIPT[pos];
+  const box = $("chapters");
+  box.innerHTML = "";
+  CHAPTERS.forEach((ch, i) => {
+    const btn = document.createElement("button");
+    btn.className = "chapter" + (i === ci ? " current" : i < ci ? " done" : "");
+    btn.innerHTML = `<span class="num">${i + 1}</span><span><span class="t">${ch.title}${ch.skim ? '<span class="skim-tag">skim</span>' : ""}</span><div class="m">${ch.file} · ${ch.meta}</div></span>`;
+    btn.addEventListener("click", () => { pos = SCRIPT.findIndex((s) => s.ci === i); render(); });
+    box.appendChild(btn);
+  });
+  $("progress-label").textContent = `Segment ${pos + 1} of ${SCRIPT.length}`;
+  $("progress-fill").style.width = ((pos + 1) / SCRIPT.length) * 100 + "%";
+}
+
+function renderCode() {
+  const { ci, si } = SCRIPT[pos];
+  const ch = CHAPTERS[ci], seg = ch.segments[si];
+  const pane = $("code"), mm = $("minimap");
+  pane.innerHTML = ""; mm.innerHTML = "";
+  ch.code.forEach((ln, i) => {
+    const [t, s] = ln;
+    const inHl = i >= seg.hl[0] && i <= seg.hl[1];
+    const row = document.createElement("div");
+    row.className = "cl " + t + (inHl ? " hl" : "");
+    row.innerHTML = `<span class="gut">${i + 1}</span><span class="sign">${t === "add" ? "+" : t === "del" ? "−" : " "}</span><span>${hi(s)}</span>`;
+    pane.appendChild(row);
+    const bar = document.createElement("div");
+    bar.className = "mm-line " + (inHl ? "hl" : t);
+    bar.style.width = Math.max(6, Math.min(54, s.length * 0.62)) + "px";
+    mm.appendChild(bar);
+  });
+  const first = pane.children[seg.hl[0]];
+  if (first) first.scrollIntoView({ block: "center", behavior: "instant" });
+}
+
+function renderChrome() {
+  const { ci, si } = SCRIPT[pos];
+  const ch = CHAPTERS[ci];
+  // tabs + breadcrumbs
+  const strip = $("tabstrip");
+  if (currentView === "walkthrough") {
+    strip.innerHTML = `<div class="etab active"><span class="mod"></span>${ch.file.split("/").pop()}</div>`;
+    const crumbs = ch.file.split("/");
+    $("breadcrumbs").innerHTML =
+      crumbs.map((c) => `<span>${c}</span>`).join('<span class="sep">›</span>') +
+      `<span class="sep">›</span><span class="leaf">${ch.symbol}</span>`;
+    $("breadcrumbs").classList.remove("hidden");
+  } else if (currentView === "decisions") {
+    const open = DECISIONS.filter((d) => !resolvedIds.has(d.id)).length;
+    strip.innerHTML = `<div class="etab active">Decisions${open ? ` <span class="cnt">${open} waiting</span>` : ""}</div>`;
+    $("breadcrumbs").classList.add("hidden");
+  } else {
+    strip.innerHTML = `<div class="etab active">Transcript</div>`;
+    $("breadcrumbs").classList.add("hidden");
+  }
+  // narration bar
+  $("caption").textContent = ch.segments[si].caption;
+  $("play").textContent = playing ? "⏸" : "▶";
+  $("play").setAttribute("aria-label", playing ? "Pause narration" : "Play narration");
+  $("narration").classList.toggle("speaking", playing && !holding);
+  $("eyebrow").textContent = holding ? "Paused — take your time" : playing ? "Narrating" : "Paused";
+  $("hold").classList.toggle("holding", holding);
+  $("hold").textContent = holding ? "Okay, keep going" : "Still reading — hold on";
+  // status bar
+  $("statusbar").classList.toggle("narrating", playing && !holding);
+  $("seg-state").textContent = holding ? "✋ holding" : playing ? "▶ narrating" : "⏸ paused";
+  $("seg-pos").textContent = `ch ${ci + 1}/${CHAPTERS.length} · seg ${pos + 1}/${SCRIPT.length}`;
+}
+
+function render() { renderChapters(); renderCode(); renderChrome(); }
+
+function tick() { if (pos < SCRIPT.length - 1) { pos++; render(); } else stop(); }
+function start() {
+  playing = true; holding = false;
+  clearInterval(timer); timer = setInterval(tick, SEG_MS);
+  renderChrome();
+}
+function stop() { playing = false; clearInterval(timer); renderChrome(); }
+
+$("play").addEventListener("click", () => (playing ? stop() : start()));
+$("prev").addEventListener("click", () => { if (pos > 0) pos--; render(); });
+$("next").addEventListener("click", () => { if (pos < SCRIPT.length - 1) pos++; render(); });
+$("hold").addEventListener("click", () => {
+  holding = !holding;
+  if (holding) { clearInterval(timer); playing = false; renderChrome(); }
+  else start();
+});
+$("speed").addEventListener("click", (e) => {
+  const speeds = ["1.0×", "1.25×", "1.5×", "0.8×"];
+  e.target.textContent = speeds[(speeds.indexOf(e.target.textContent) + 1) % speeds.length];
+});
+$("ask").addEventListener("focus", stop);
+
+document.addEventListener("keydown", (e) => {
+  if (e.target.matches("input, textarea") || currentView !== "walkthrough") return;
+  if (e.key === " ") { e.preventDefault(); playing ? stop() : start(); }
+  else if (e.key === "ArrowRight") { if (pos < SCRIPT.length - 1) pos++; render(); }
+  else if (e.key === "ArrowLeft") { if (pos > 0) pos--; render(); }
+  else if (e.key.toLowerCase() === "h") $("hold").click();
+});
+
+// ------------------------------------------------------------------
+// Decisions
+// ------------------------------------------------------------------
+const resolvedIds = new Set(DECISIONS.filter((d) => d.resolved).map((d) => d.id));
+
+function updateBadge() {
+  const open = DECISIONS.filter((d) => !resolvedIds.has(d.id)).length;
+  const b = $("decision-badge");
+  b.textContent = open || "";
+  b.dataset.n = open;
+}
+
+function renderDecisionSidebar() {
+  const list = $("d-list");
+  list.innerHTML = "";
+  const sorted = [...DECISIONS].sort((a, b) => resolvedIds.has(a.id) - resolvedIds.has(b.id));
+  sorted.forEach((d) => {
+    const done = resolvedIds.has(d.id);
+    const item = document.createElement("button");
+    item.className = "d-item" + (done ? " ok" : "");
+    item.innerHTML = `<span class="st"></span><span><span class="q">${d.q}</span><div class="w">${done ? "answered" : d.waiting}</div></span>`;
+    item.addEventListener("click", () => {
+      const card = document.querySelector(`[data-decision="${d.id}"]`);
+      if (card) card.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+    list.appendChild(item);
+  });
+}
+
+function renderDecisions() {
+  const list = $("decision-list");
+  list.innerHTML = "";
+  const sorted = [...DECISIONS].sort((a, b) => resolvedIds.has(a.id) - resolvedIds.has(b.id));
+  sorted.forEach((d) => {
+    const done = resolvedIds.has(d.id);
+    const card = document.createElement("div");
+    card.className = "card" + (done ? " resolved-card" : "");
+    card.dataset.decision = d.id;
+    card.innerHTML = `
+      <div class="card-meta"><span class="pill ${done ? "resolved" : "blocking"}">${done ? "Answered" : "Blocking"}</span><span>${d.waiting}</span></div>
+      <h3>${d.q}</h3>
+      <p class="ctx">${d.ctx}</p>`;
+    if (!done) {
+      const opts = document.createElement("div");
+      opts.className = "options";
+      d.options.forEach((o) => {
+        const b = document.createElement("button");
+        b.className = "opt"; b.textContent = o;
+        b.addEventListener("click", () => {
+          d.resolved = `You said: ${o.toLowerCase()}. The agent is on it.`;
+          resolvedIds.add(d.id);
+          updateBadge(); renderDecisions(); renderDecisionSidebar(); renderChrome();
+        });
+        opts.appendChild(b);
+      });
+      const reply = document.createElement("div");
+      reply.className = "reply";
+      reply.innerHTML = `<input type="text" placeholder="Or answer in your own words…"><button class="btn">Send</button>`;
+      card.append(opts, reply);
+    } else {
+      const r = document.createElement("p");
+      r.className = "resolution"; r.textContent = "✓ " + d.resolved;
+      card.appendChild(r);
+    }
+    list.appendChild(card);
+  });
+}
+
+// ------------------------------------------------------------------
+// Transcript
+// ------------------------------------------------------------------
+const FILTERS = [
+  { key: "finding", label: "Findings" },
+  { key: "answer", label: "Answers" },
+  { key: "decision", label: "Decisions" },
+  { key: "steps", label: "Process steps" },
+];
+const filterState = { finding: true, answer: true, decision: true, steps: true };
+
+function renderFilters() {
+  const box = $("filters");
+  box.innerHTML = "";
+  FILTERS.forEach((f) => {
+    const count = FEED.filter((i) => i.type === f.key).length;
+    const b = document.createElement("button");
+    b.className = "filter";
+    b.setAttribute("aria-pressed", String(filterState[f.key]));
+    b.innerHTML = `<span class="sw"></span>${f.label}<span class="ct">${count}</span>`;
+    b.addEventListener("click", () => {
+      filterState[f.key] = !filterState[f.key];
+      renderFilters(); renderFeed();
+    });
+    box.appendChild(b);
+  });
+}
+
+function renderFeed() {
+  const feed = $("feed");
+  feed.innerHTML = "";
+  FEED.forEach((item) => {
+    if (!filterState[item.type]) return;
+    if (item.type === "steps") {
+      const det = document.createElement("details");
+      det.className = "steps";
+      det.innerHTML = `<summary>${item.label}<span class="rule"></span></summary>` +
+        item.steps.map((s) => `<div class="step">· ${s}</div>`).join("");
+      feed.appendChild(det);
+      return;
+    }
+    const card = document.createElement("div");
+    card.className = "card t-card";
+    if (item.type === "decision") {
+      const done = resolvedIds.has(item.ref);
+      card.innerHTML = `<div class="card-meta"><span class="pill ${done ? "resolved" : "decision"}">${done ? "Decision · answered" : "Decision · waiting on you"}</span></div>
+        <h3>${item.title}</h3>
+        <p><a class="t-link" href="#" data-goto="decisions">${done ? "See the answer in Decisions →" : "Answer it in Decisions →"}</a></p>`;
+    } else {
+      card.innerHTML = `<div class="card-meta"><span class="pill ${item.type}">${item.type}</span></div>
+        <h3>${item.title}</h3><p>${item.body}</p>` + (item.body2 ? `<p>${item.body2}</p>` : "");
+    }
+    feed.appendChild(card);
+  });
+}
+
+// ------------------------------------------------------------------
+// View switching
+// ------------------------------------------------------------------
+function show(view) {
+  currentView = view;
+  document.querySelectorAll(".act[data-view]").forEach((t) =>
+    t.setAttribute("aria-selected", String(t.dataset.view === view)));
+  document.querySelectorAll(".view").forEach((v) =>
+    v.classList.toggle("active", v.id === "view-" + view));
+  document.querySelectorAll(".sb-section").forEach((s) =>
+    s.classList.toggle("active", s.id === "sb-" + view));
+  $("panel").classList.toggle("hidden", view !== "walkthrough");
+  if (view === "decisions") { renderDecisions(); renderDecisionSidebar(); }
+  if (view === "transcript") { renderFilters(); renderFeed(); }
+  if (view !== "walkthrough") stop(); else render();
+  renderChrome();
+}
+document.querySelectorAll(".act[data-view]").forEach((t) =>
+  t.addEventListener("click", () => show(t.dataset.view)));
+document.addEventListener("click", (e) => {
+  const link = e.target.closest("[data-goto]");
+  if (link) { e.preventDefault(); show(link.dataset.goto); }
+});
+
+updateBadge();
+render();
+renderDecisionSidebar();
+renderFilters();
+</script>

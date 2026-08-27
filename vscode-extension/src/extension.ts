@@ -3,12 +3,16 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { Walkthrough } from "./walkthrough";
-import { ExplainerServer } from "./server";
+import { BrixServer } from "./server";
 import { SidebarProvider } from "./sidebar";
 import { WalkthroughStorage } from "./storage";
-import { highlightRange, highlightSegmentRange, highlightSubRange, clearHighlights, disposeHighlights, enableSmoothScrolling, restoreSmoothScrolling } from "./highlight";
+import { highlightRange, highlightSegmentRange, highlightSubRange, clearHighlights, disposeHighlights, enableSmoothScrolling, restoreSmoothScrolling, setHighlightTarget } from "./highlight";
 import { streamTTS, isTTSAvailable, ensureServer, setWorkspaceRoot } from "./tts-bridge";
-import type { AgentMessage, FromWebviewMessage, Segment, Highlight } from "./types";
+import { openDecisionsPanel, updateDecisionsPanel } from "./decisions-panel";
+import { TheaterView } from "./theater";
+import * as integrity from "./integrity";
+import type { PlanIntegrity, PlanValidity } from "./integrity";
+import type { AgentMessage, FromWebviewMessage, Segment, Highlight, Decision, FeedItem } from "./types";
 
 // ── File-watcher fallback (backward compat) ──
 
@@ -60,7 +64,7 @@ function processHighlightFile(): void {
 	}
 
 	highlightRange(request.file, request.start, request.end).catch((err) => {
-		console.error("[code-explainer] Fallback highlight failed:", err);
+		console.error("[brix] Fallback highlight failed:", err);
 	});
 }
 
@@ -97,11 +101,22 @@ function buildSegmentTTSPlan(highlights: Highlight[], startFrom = 0): SegmentTTS
 
 // ── Main activation ──
 
+/** Any surface that can play narration audio (sidebar view or theater controls). */
+interface PlaybackHost {
+	sendAudioChunk(data: string, sampleRate: number): void;
+	sendAudioEnd(): void;
+	sendAudioStop(): void;
+	sendAudioSuspend(): void;
+	sendAudioResume(): void;
+	waitForPlaybackComplete(): Promise<void>;
+	setChunkPlayedCallback(cb: (() => void) | undefined): void;
+}
+
 function playHighlightChunk(
 	segment: Segment,
 	highlight: Highlight,
 	highlightIndex: number,
-	sidebar: SidebarProvider,
+	sidebar: PlaybackHost,
 	voice: string,
 	speed: number,
 ): { promise: Promise<void>; abort: () => void } {
@@ -126,7 +141,7 @@ function playHighlightChunk(
 					if (!aborted) sidebar.sendAudioEnd();
 				},
 				(err) => {
-					console.error("[code-explainer] TTS error:", err);
+					console.error("[brix] TTS error:", err);
 					resolve();
 				},
 			);
@@ -152,7 +167,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
 	const walkthrough = new Walkthrough();
 	const sidebar = new SidebarProvider(context.extensionUri);
-	const server = new ExplainerServer(walkthrough);
+	const server = new BrixServer(walkthrough);
+	const theater = new TheaterView(context.extensionUri);
 
 	let storage: WalkthroughStorage | undefined;
 	if (wsFolder) {
@@ -168,14 +184,230 @@ export function activate(context: vscode.ExtensionContext): void {
 	);
 
 	// Initialize walkthrough-active context as false
-	vscode.commands.executeCommand('setContext', 'codeExplainer.walkthroughActive', false);
+	vscode.commands.executeCommand('setContext', 'brix.walkthroughActive', false);
+
+	// ── Walkthrough freshness ──
+	// Plans pin file:line ranges, so edits can point narration at the wrong code.
+	let planIntegrity: PlanIntegrity | undefined;
+	let planValidity: PlanValidity | undefined;
+
+	async function captureIntegrity(): Promise<void> {
+		const segs = walkthrough.getState().segments;
+		if (segs.length === 0) { planIntegrity = undefined; planValidity = undefined; return; }
+		planIntegrity = await integrity.capture(segs, wsFolder);
+		planValidity = await integrity.validate(segs, planIntegrity, wsFolder);
+		pushValidity();
+	}
+
+	/** Re-check the plan against disk; auto-relocate segments that merely moved. */
+	async function revalidate(): Promise<void> {
+		if (!planIntegrity) return;
+		const segs = walkthrough.getState().segments;
+		if (segs.length === 0) return;
+
+		const result = await integrity.validate(segs, planIntegrity, wsFolder);
+
+		// Apply pure line shifts so the walkthrough keeps working after edits above it.
+		for (const seg of segs) {
+			const v = result.segments[seg.id];
+			if (v && v.state === "shifted") {
+				walkthrough.replaceSegment(seg.id, integrity.shiftSegment(seg, v.delta));
+			}
+		}
+		if (Object.values(result.segments).some((v) => v.state === "shifted")) {
+			// re-anchor to the new positions so the shift isn't re-applied
+			planIntegrity = await integrity.capture(walkthrough.getState().segments, wsFolder);
+			planValidity = await integrity.validate(walkthrough.getState().segments, planIntegrity, wsFolder);
+			// preserve the fact that something moved for the UI
+			planValidity = { ...planValidity, overall: result.overall === "stale" ? "stale" : "shifted", segments: result.segments };
+		} else {
+			planValidity = result;
+		}
+		pushValidity();
+	}
+
+	function pushValidity(): void {
+		sidebar.postMessage({ type: "validity", validity: planValidity ?? null });
+		if (theater.isOpen()) theater.sendValidity(planValidity ?? null);
+	}
+
+	// ── Decision queue (human-in-the-loop) ──
+	// ponytail: in-memory only — decisions are backed by handoff docs on disk,
+	// so losing the card list on reload costs nothing durable.
+	const decisions: Decision[] = [];
+	server.setDecisionsProvider(() => decisions);
+	server.setValidityProvider(() => planValidity ?? { overall: "unknown" });
+
+	/**
+	 * Audio must play in the same webview the user clicked — an AudioContext
+	 * only unlocks on a gesture in its own document. Theater controls win while
+	 * visible; otherwise the sidebar hosts.
+	 */
+	let lastAudioHostWasTheater: boolean | undefined;
+	function audioHost(): PlaybackHost {
+		const useTheater = theater.isVisible();
+		if (lastAudioHostWasTheater !== undefined && lastAudioHostWasTheater !== useTheater) {
+			// Host switched: any "suspended audio" belongs to the old webview.
+			hasSuspendedAudio = false;
+		}
+		lastAudioHostWasTheater = useTheater;
+		return useTheater ? theater : sidebar;
+	}
+
+	/** The play loop's view of the world: audio goes to the host, UI to every surface. */
+	function playbackSurface(): PlaybackHost & { updateState(s: ReturnType<Walkthrough["getState"]>): void } {
+		const host = audioHost();
+		return {
+			sendAudioChunk: (d, r) => host.sendAudioChunk(d, r),
+			sendAudioEnd: () => host.sendAudioEnd(),
+			sendAudioStop: () => host.sendAudioStop(),
+			sendAudioSuspend: () => host.sendAudioSuspend(),
+			sendAudioResume: () => host.sendAudioResume(),
+			waitForPlaybackComplete: () => host.waitForPlaybackComplete(),
+			setChunkPlayedCallback: (cb) => host.setChunkPlayedCallback(cb),
+			updateState: (st) => pushStateFrom(st),
+		};
+	}
+
+	function pushStateFrom(st: ReturnType<Walkthrough["getState"]>): void {
+		sidebar.updateState(st);
+		if (theater.isOpen()) theater.update(st);
+	}
+
+	/** Push walkthrough state to every open surface. */
+	function pushState(): void {
+		sidebar.updateState(walkthrough.getState());
+		if (theater.isOpen()) theater.update(walkthrough.getState());
+	}
+
+	/** Open theater mode: real editor centre, outline right, controls bottom. */
+	async function openTheater(): Promise<void> {
+		setHighlightTarget(vscode.ViewColumn.One, true);
+		await theater.open(walkthrough.getState());
+		sidebar.reveal(); // sidebar hosts audio playback; keep it resolved
+	}
+
+	/**
+	 * Show the theater panels only while the active tab belongs to the
+	 * walkthrough (a segment file, or one of our own panels). Anywhere else,
+	 * hide them so the editor gets the full window back.
+	 */
+	let theaterSyncing = false;
+	function syncTheaterVisibility(): void {
+		if (!theater.isArmed() || theaterSyncing) return;
+
+		const tab = vscode.window.tabGroups.activeTabGroup?.activeTab;
+		const input = tab?.input as { viewType?: string; uri?: vscode.Uri } | undefined;
+		let relevant = false;
+		if (input && typeof input === "object") {
+			if (typeof input.viewType === "string") {
+				// our own outline/controls panels count as "on the walkthrough"
+				relevant = input.viewType.includes("brix.");
+			} else if (input.uri) {
+				const files = new Set(walkthrough.getState().segments.map((seg) => seg.file));
+				relevant = files.has(input.uri.fsPath);
+			}
+		}
+
+		if (relevant === theater.isVisible()) return;
+		theaterSyncing = true;
+		const done = () => { theaterSyncing = false; };
+		if (relevant) {
+			theater.showAgain(walkthrough.getState()).then(done, done);
+		} else {
+			// The controls webview owns the audio while visible — disposing it
+			// mid-narration would strand playback, so pause first.
+			if (walkthrough.getState().status === "playing") {
+				fullAudioStop();
+				walkthrough.pause();
+			}
+			theater.hide();
+			// let the layout settle before accepting more tab events
+			setTimeout(done, 150);
+		}
+	}
+
+	function closeTheater(): void {
+		setHighlightTarget(undefined, false);
+		theater.close();
+	}
+
+	function mirrorHighlightAdvance(_sb: unknown, index: number, total: number, explanation?: string): void {
+		sidebar.sendHighlightAdvance(index, total, explanation);
+		if (theater.isOpen()) theater.sendHighlightAdvance(index, total, explanation);
+	}
+
+	function pushDecisions(): void {
+		sidebar.sendDecisions(decisions);
+		updateDecisionsPanel(decisions);
+	}
+
+	function answerDecision(id: string, answer: string): void {
+		const decision = decisions.find((d) => d.id === id);
+		if (!decision || decision.status === "answered") return;
+		decision.status = "answered";
+		decision.answer = answer;
+		pushDecisions();
+		server.queueAction({
+			type: "user_action",
+			action: "decision_answered",
+			decisionId: id,
+			answer,
+			handoffPath: decision.handoffPath,
+		});
+	}
+
+	function openHandoff(relOrAbsPath: string): void {
+		const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+		const abs = path.isAbsolute(relOrAbsPath) ? relOrAbsPath : root ? path.join(root, relOrAbsPath) : relOrAbsPath;
+		vscode.window.showTextDocument(vscode.Uri.file(abs), { preview: true }).then(undefined, () => {
+			vscode.window.showWarningMessage(`Brix: handoff doc not found: ${relOrAbsPath}`);
+		});
+	}
+
+	function showDecisionsPanel(): void {
+		openDecisionsPanel(answerDecision, openHandoff, () => decisions);
+	}
+
+	// ── Distilled transcript feed + watched long-running tasks ──
+	// ponytail: in-memory, capped — the terminal transcript is the full record;
+	// this feed is the distilled view, losing it on reload costs nothing.
+	const MAX_FEED_ITEMS = 200;
+	const feed: FeedItem[] = [];
+	const watchedTasks = new Map<string, { title: string; timer: ReturnType<typeof setInterval> }>();
+	let feedIdCounter = 0;
+
+	function pushFeed(): void {
+		sidebar.sendFeed(feed);
+	}
+
+	function addFeedItem(item: { id?: string; kind: FeedItem["kind"]; title: string; body?: string; source?: string }): void {
+		feed.unshift({
+			id: item.id || `f${++feedIdCounter}`,
+			kind: item.kind,
+			title: item.title,
+			body: item.body,
+			source: item.source,
+			ts: Date.now(),
+		});
+		if (feed.length > MAX_FEED_ITEMS) feed.length = MAX_FEED_ITEMS;
+		pushFeed();
+	}
+
+	function endWatchedTask(id: string): void {
+		const task = watchedTasks.get(id);
+		if (task) {
+			clearInterval(task.timer);
+			watchedTasks.delete(id);
+		}
+	}
 
 	// Start file-watcher fallback
 	startFileWatcher();
 
 	// Start HTTP+WS server
 	server.start().then((port) => {
-		console.log(`[code-explainer] Server listening on port ${port}`);
+		console.log(`[brix] Server listening on port ${port}`);
 	});
 
 	// ── Walkthrough events → sidebar + highlights ──
@@ -195,8 +427,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
 	/** Stop audio and reset suspended flag. Use this instead of sidebar.sendAudioStop() directly. */
 	function fullAudioStop(): void {
-		sidebar.sendAudioStop();
-		sidebar.setChunkPlayedCallback(undefined);
+		audioHost().sendAudioStop();
+		audioHost().setChunkPlayedCallback(undefined);
 		hasSuspendedAudio = false;
 	}
 
@@ -208,7 +440,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	 */
 	function resumeFromSuspended(): void {
 		hasSuspendedAudio = false;
-		sidebar.sendAudioResume();
+		audioHost().sendAudioResume();
 	}
 
 	/** Pre-warm the TTS server then resume playback from a specific highlight index. */
@@ -218,27 +450,27 @@ export function activate(context: vscode.ExtensionContext): void {
 		highlightLoopGeneration++;
 		if (currentChunkAbort) { currentChunkAbort(); currentChunkAbort = undefined; }
 		fullAudioStop();
-		sidebar.sendServerLoading(true);
+		sidebar.sendServerLoading(true); theater.sendServerLoading(true);
 		const segId = seg.id;
 		ensureServer().then(() => {
-			sidebar.sendServerLoading(false);
+			sidebar.sendServerLoading(false); theater.sendServerLoading(false);
 			// Guard: segment may have changed while server was warming up
 			if (walkthrough.getCurrentSegment()?.id !== segId) return;
 			if (walkthrough.getState().status === "playing") {
-				playSegmentHighlights(seg, walkthrough, sidebar, startHighlight).catch((err) => {
-					console.error("[code-explainer] Highlight loop error:", err);
+				playSegmentHighlights(seg, walkthrough, playbackSurface(), startHighlight).catch((err) => {
+					console.error("[brix] Highlight loop error:", err);
 				});
 			}
 		}).catch((err) => {
-			sidebar.sendServerLoading(false);
-			console.error("[code-explainer] ensureServer failed:", err);
+			sidebar.sendServerLoading(false); theater.sendServerLoading(false);
+			console.error("[brix] ensureServer failed:", err);
 		});
 	}
 
 	async function playSegmentHighlights(
 		segment: Segment,
 		wt: Walkthrough,
-		sb: SidebarProvider,
+		sb: PlaybackHost & { updateState(s: ReturnType<Walkthrough["getState"]>): void },
 		startFromHighlight = 0,
 	): Promise<void> {
 		const myGeneration = ++highlightLoopGeneration;
@@ -249,11 +481,13 @@ export function activate(context: vscode.ExtensionContext): void {
 		if (wt.getState().status !== "playing") {
 			await highlightSegmentRange(segment.file, segment.start, segment.end).catch(() => {});
 			sb.updateState(wt.getState());
+			if (theater.isOpen()) theater.update(wt.getState());
 			return;
 		}
 
 		await highlightSegmentRange(segment.file, segment.start, segment.end).catch(() => {});
 		sb.updateState(wt.getState());
+		if (theater.isOpen()) theater.update(wt.getState());
 
 		// ── Continuous TTS path: one call per segment ──
 		const hasTTS = isTTSAvailable() && highlights.some((h) => h.ttsText);
@@ -263,7 +497,7 @@ export function activate(context: vscode.ExtensionContext): void {
 				// Show first highlight immediately
 				const firstHighlightIdx = plan.highlightIndices[0] ?? startFromHighlight;
 				wt.setHighlightIndex(firstHighlightIdx);
-				sb.sendHighlightAdvance(firstHighlightIdx, highlights.length, highlights[firstHighlightIdx].explanation);
+				mirrorHighlightAdvance(sb, firstHighlightIdx, highlights.length, highlights[firstHighlightIdx].explanation);
 				await highlightSubRange(segment.file, highlights[firstHighlightIdx].start, highlights[firstHighlightIdx].end, highlights).catch(() => {});
 
 				// Track played chunks (from webview onended) to advance pointer at playback speed
@@ -283,7 +517,7 @@ export function activate(context: vscode.ExtensionContext): void {
 						const highlightIdx = plan.highlightIndices[nextPointer];
 						if (highlightIdx !== undefined && highlightIdx < highlights.length) {
 							wt.setHighlightIndex(highlightIdx);
-							sb.sendHighlightAdvance(highlightIdx, highlights.length, highlights[highlightIdx].explanation);
+							mirrorHighlightAdvance(sb, highlightIdx, highlights.length, highlights[highlightIdx].explanation);
 							highlightSubRange(segment.file, highlights[highlightIdx].start, highlights[highlightIdx].end, highlights).catch(() => {});
 						}
 					}
@@ -303,7 +537,7 @@ export function activate(context: vscode.ExtensionContext): void {
 						sb.sendAudioEnd();
 					},
 					(err) => {
-						console.error("[code-explainer] TTS error:", err);
+						console.error("[brix] TTS error:", err);
 					},
 				);
 
@@ -327,7 +561,7 @@ export function activate(context: vscode.ExtensionContext): void {
 			if (myGeneration !== highlightLoopGeneration) return;
 
 			wt.setHighlightIndex(i);
-			sb.sendHighlightAdvance(i, highlights.length, highlights[i].explanation);
+			mirrorHighlightAdvance(sb, i, highlights.length, highlights[i].explanation);
 
 			const chunk = playHighlightChunk(
 				segment,
@@ -365,19 +599,19 @@ export function activate(context: vscode.ExtensionContext): void {
 
 		const startIdx = pendingHighlightStart ?? 0;
 		pendingHighlightStart = undefined;
-		playSegmentHighlights(segment, walkthrough, sidebar, startIdx).catch((err) => {
-			console.error("[code-explainer] Highlight loop error:", err);
+		playSegmentHighlights(segment, walkthrough, playbackSurface(), startIdx).catch((err) => {
+			console.error("[brix] Highlight loop error:", err);
 		});
 	});
 
 	walkthrough.on("plan", () => {
-		sidebar.updateState(walkthrough.getState());
+		pushState();
 		server.broadcastState();
-		vscode.commands.executeCommand('setContext', 'codeExplainer.walkthroughActive', true);
+		vscode.commands.executeCommand('setContext', 'brix.walkthroughActive', true);
 	});
 
 	walkthrough.on("status", () => {
-		sidebar.updateState(walkthrough.getState());
+		pushState();
 		server.broadcastState();
 
 		const state = walkthrough.getState();
@@ -390,7 +624,7 @@ export function activate(context: vscode.ExtensionContext): void {
 				// Suspend audio but keep the highlight loop alive — don't
 				// increment highlightLoopGeneration so the chunkPlayedCallback
 				// remains valid and can advance highlights when audio resumes.
-				sidebar.sendAudioSuspend();
+				audioHost().sendAudioSuspend();
 				hasSuspendedAudio = true;
 			} else {
 				highlightLoopGeneration++;
@@ -399,9 +633,10 @@ export function activate(context: vscode.ExtensionContext): void {
 
 		if (state.status === "stopped") {
 			hasSuspendedAudio = false;
+			closeTheater();
 			clearHighlights();
 			restoreSmoothScrolling().catch(() => {});
-			vscode.commands.executeCommand('setContext', 'codeExplainer.walkthroughActive', false);
+			vscode.commands.executeCommand('setContext', 'brix.walkthroughActive', false);
 		}
 	});
 
@@ -410,7 +645,7 @@ export function activate(context: vscode.ExtensionContext): void {
 	const speedPresets = [0.75, 1, 1.25, 1.5, 2];
 
 	context.subscriptions.push(
-		vscode.commands.registerCommand('codeExplainer.togglePlayPause', () => {
+		vscode.commands.registerCommand('brix.togglePlayPause', () => {
 			walkthrough.togglePlayPause();
 			if (walkthrough.getState().status === "playing") {
 				if (hasSuspendedAudio) {
@@ -420,7 +655,7 @@ export function activate(context: vscode.ExtensionContext): void {
 				}
 			}
 		}),
-		vscode.commands.registerCommand('codeExplainer.next', () => {
+		vscode.commands.registerCommand('brix.next', () => {
 			const seg = walkthrough.getCurrentSegment();
 			if (seg?.highlights && seg.highlights.length > 0) {
 				const curIdx = walkthrough.getHighlightIndex();
@@ -431,16 +666,16 @@ export function activate(context: vscode.ExtensionContext): void {
 				fullAudioStop();
 				walkthrough.setHighlightIndex(nextIdx);
 				if (walkthrough.getState().status === "playing") {
-					playSegmentHighlights(seg, walkthrough, sidebar, nextIdx).catch((err) => {
-						console.error("[code-explainer] Highlight loop error:", err);
+					playSegmentHighlights(seg, walkthrough, playbackSurface(), nextIdx).catch((err) => {
+						console.error("[brix] Highlight loop error:", err);
 					});
 				} else {
-					sidebar.sendHighlightAdvance(nextIdx, seg.highlights.length);
+					mirrorHighlightAdvance(sidebar, nextIdx, seg.highlights.length);
 					highlightSubRange(seg.file, seg.highlights[nextIdx].start, seg.highlights[nextIdx].end).catch(() => {});
 				}
 			}
 		}),
-		vscode.commands.registerCommand('codeExplainer.prev', () => {
+		vscode.commands.registerCommand('brix.prev', () => {
 			const seg = walkthrough.getCurrentSegment();
 			if (seg?.highlights && seg.highlights.length > 0) {
 				const curIdx = walkthrough.getHighlightIndex();
@@ -451,44 +686,44 @@ export function activate(context: vscode.ExtensionContext): void {
 				fullAudioStop();
 				walkthrough.setHighlightIndex(prevIdx);
 				if (walkthrough.getState().status === "playing") {
-					playSegmentHighlights(seg, walkthrough, sidebar, prevIdx).catch((err) => {
-						console.error("[code-explainer] Highlight loop error:", err);
+					playSegmentHighlights(seg, walkthrough, playbackSurface(), prevIdx).catch((err) => {
+						console.error("[brix] Highlight loop error:", err);
 					});
 				} else {
-					sidebar.sendHighlightAdvance(prevIdx, seg.highlights.length);
+					mirrorHighlightAdvance(sidebar, prevIdx, seg.highlights.length);
 					highlightSubRange(seg.file, seg.highlights[prevIdx].start, seg.highlights[prevIdx].end).catch(() => {});
 				}
 			}
 		}),
-		vscode.commands.registerCommand('codeExplainer.nextSegment', () => {
+		vscode.commands.registerCommand('brix.nextSegment', () => {
 			if (currentChunkAbort) { currentChunkAbort(); currentChunkAbort = undefined; }
 			fullAudioStop();
 			walkthrough.next();
 		}),
-		vscode.commands.registerCommand('codeExplainer.prevSegment', () => {
+		vscode.commands.registerCommand('brix.prevSegment', () => {
 			if (currentChunkAbort) { currentChunkAbort(); currentChunkAbort = undefined; }
 			fullAudioStop();
 			walkthrough.prev();
 		}),
-		vscode.commands.registerCommand('codeExplainer.stop', () => {
+		vscode.commands.registerCommand('brix.stop', () => {
 			fullAudioStop();
 			walkthrough.stop();
 		}),
-		vscode.commands.registerCommand('codeExplainer.speedUp', () => {
+		vscode.commands.registerCommand('brix.speedUp', () => {
 			const currentIdx = speedPresets.indexOf(ttsSpeed);
 			const idx = currentIdx === -1 ? 1 : currentIdx;
 			const nextIdx = Math.min(idx + 1, speedPresets.length - 1);
 			ttsSpeed = speedPresets[nextIdx];
 			vscode.window.setStatusBarMessage(`Speed: ${ttsSpeed}x`, 2000);
 		}),
-		vscode.commands.registerCommand('codeExplainer.speedDown', () => {
+		vscode.commands.registerCommand('brix.speedDown', () => {
 			const currentIdx = speedPresets.indexOf(ttsSpeed);
 			const idx = currentIdx === -1 ? 1 : currentIdx;
 			const nextIdx = Math.max(idx - 1, 0);
 			ttsSpeed = speedPresets[nextIdx];
 			vscode.window.setStatusBarMessage(`Speed: ${ttsSpeed}x`, 2000);
 		}),
-		vscode.commands.registerCommand('codeExplainer.saveWalkthrough', async () => {
+		vscode.commands.registerCommand('brix.saveWalkthrough', async () => {
 			if (!storage) {
 				vscode.window.showErrorMessage("No workspace folder open");
 				return;
@@ -516,7 +751,13 @@ export function activate(context: vscode.ExtensionContext): void {
 			walkthroughSaved = true;
 			vscode.window.showInformationMessage(`Walkthrough saved to .walkthroughs/${name}.json`);
 		}),
-		vscode.commands.registerCommand('codeExplainer.loadWalkthrough', async () => {
+		vscode.commands.registerCommand('brix.openTheater', () => {
+			openTheater().catch((err) => console.error("[brix] theater open failed:", err));
+		}),
+		vscode.commands.registerCommand('brix.openDecisions', () => {
+			showDecisionsPanel();
+		}),
+		vscode.commands.registerCommand('brix.loadWalkthrough', async () => {
 			if (!storage) {
 				vscode.window.showErrorMessage("No workspace folder open");
 				return;
@@ -548,11 +789,24 @@ export function activate(context: vscode.ExtensionContext): void {
 
 	server.setMessageHandler((msg: AgentMessage) => {
 		switch (msg.type) {
-			case "set_plan":
+			case "set_plan": {
 				walkthroughSaved = false;
 				walkthrough.setPlan(msg.title, msg.segments);
 				sidebar.reveal();
+				// Auto-save so the sidebar's recents list is always populated.
+				storage?.save(msg.title, msg.segments, undefined, planIntegrity).then(() => {
+					sidebar.postMessage({ type: "saved_list", walkthroughs: [] });
+					return storage?.list();
+				}).then((list) => {
+					if (list) sidebar.postMessage({
+						type: "saved_list",
+						walkthroughs: list.slice(0, 5).map(({ name, title }) => ({ name, title })),
+					});
+				}).catch(() => {});
+				openTheater().catch((err) => console.error("[brix] theater open failed:", err));
+				captureIntegrity().catch(() => {});
 				break;
+			}
 			case "insert_after":
 				walkthrough.insertAfter(msg.afterSegment, msg.segments);
 				break;
@@ -579,12 +833,68 @@ export function activate(context: vscode.ExtensionContext): void {
 				fullAudioStop();
 				walkthrough.stop();
 				break;
+			case "raise_decision": {
+				const existing = decisions.find((d) => d.id === msg.decision.id);
+				if (existing) {
+					Object.assign(existing, msg.decision, { status: "open" as const, answer: undefined });
+				} else {
+					decisions.unshift({ ...msg.decision, status: "open", raisedAt: Date.now() });
+				}
+				pushDecisions();
+				sidebar.reveal();
+				vscode.window
+					.showInformationMessage(`Brix — decision needed: ${msg.decision.title}`, "Open Brix")
+					.then((choice) => { if (choice) sidebar.reveal(); });
+				break;
+			}
+			case "resolve_decision": {
+				const idx = decisions.findIndex((d) => d.id === msg.id);
+				if (idx !== -1) {
+					if (msg.answer !== undefined) {
+						decisions[idx].status = "answered";
+						decisions[idx].answer = msg.answer;
+					} else {
+						decisions.splice(idx, 1);
+					}
+					pushDecisions();
+				}
+				break;
+			}
+			case "post_update":
+				addFeedItem(msg.item);
+				break;
+			case "watch_task": {
+				endWatchedTask(msg.id); // re-watching resets the timer
+				const intervalMs = Math.max(60, msg.intervalSec ?? 300) * 1000;
+				const timer = setInterval(() => {
+					server.queueStatusRequest(msg.id, msg.title);
+				}, intervalMs);
+				watchedTasks.set(msg.id, { title: msg.title, timer });
+				addFeedItem({
+					kind: "progress",
+					title: `Watching: ${msg.title}`,
+					body: `Status updates every ${Math.round(intervalMs / 60000)} min while this runs.`,
+					source: `task:${msg.id}`,
+				});
+				break;
+			}
+			case "end_task": {
+				const task = watchedTasks.get(msg.id);
+				endWatchedTask(msg.id);
+				addFeedItem({
+					kind: "status",
+					title: task ? `Done: ${task.title}` : `Done: ${msg.id}`,
+					body: msg.summary,
+					source: `task:${msg.id}`,
+				});
+				break;
+			}
 		}
 	});
 
 	// ── Webview messages → walkthrough state + server ──
 
-	sidebar.setMessageHandler(async (msg: FromWebviewMessage) => {
+	const handleWebviewMessage = async (msg: FromWebviewMessage): Promise<void> => {
 		switch (msg.type) {
 			case "play_pause":
 				walkthrough.togglePlayPause();
@@ -616,11 +926,11 @@ export function activate(context: vscode.ExtensionContext): void {
 					fullAudioStop();
 					walkthrough.setHighlightIndex(nextIdx);
 					if (walkthrough.getState().status === "playing") {
-						playSegmentHighlights(seg, walkthrough, sidebar, nextIdx).catch((err) => {
-							console.error("[code-explainer] Highlight loop error:", err);
+						playSegmentHighlights(seg, walkthrough, playbackSurface(), nextIdx).catch((err) => {
+							console.error("[brix] Highlight loop error:", err);
 						});
 					} else {
-						sidebar.sendHighlightAdvance(nextIdx, seg.highlights.length, seg.highlights[nextIdx].explanation);
+						mirrorHighlightAdvance(sidebar, nextIdx, seg.highlights.length, seg.highlights[nextIdx].explanation);
 						highlightSubRange(seg.file, seg.highlights[nextIdx].start, seg.highlights[nextIdx].end, seg.highlights).catch(() => {});
 					}
 				}
@@ -651,11 +961,11 @@ export function activate(context: vscode.ExtensionContext): void {
 					fullAudioStop();
 					walkthrough.setHighlightIndex(prevIdx);
 					if (walkthrough.getState().status === "playing") {
-						playSegmentHighlights(seg, walkthrough, sidebar, prevIdx).catch((err) => {
-							console.error("[code-explainer] Highlight loop error:", err);
+						playSegmentHighlights(seg, walkthrough, playbackSurface(), prevIdx).catch((err) => {
+							console.error("[brix] Highlight loop error:", err);
 						});
 					} else {
-						sidebar.sendHighlightAdvance(prevIdx, seg.highlights.length, seg.highlights[prevIdx].explanation);
+						mirrorHighlightAdvance(sidebar, prevIdx, seg.highlights.length, seg.highlights[prevIdx].explanation);
 						highlightSubRange(seg.file, seg.highlights[prevIdx].start, seg.highlights[prevIdx].end, seg.highlights).catch(() => {});
 					}
 				}
@@ -680,7 +990,8 @@ export function activate(context: vscode.ExtensionContext): void {
 				ttsSpeed = msg.speed;
 				break;
 			case "volume_change":
-				// Volume is handled in webview's Web Audio GainNode
+				// Audio lives in the sidebar webview; relay theater changes to it.
+				sidebar.postMessage({ type: "set_volume", volume: msg.volume });
 				break;
 			case "voice_change":
 				ttsVoice = msg.voice;
@@ -698,7 +1009,7 @@ export function activate(context: vscode.ExtensionContext): void {
 				break;
 			}
 			case "save":
-				vscode.commands.executeCommand('codeExplainer.saveWalkthrough');
+				vscode.commands.executeCommand('brix.saveWalkthrough');
 				break;
 			case "load":
 				if (storage) {
@@ -707,6 +1018,14 @@ export function activate(context: vscode.ExtensionContext): void {
 						walkthroughSaved = true;
 						walkthrough.setPlan(data.title, data.segments);
 						sidebar.reveal();
+						await openTheater();
+						// A saved snapshot tells us whether the code moved since it was made.
+						if (data.integrity) {
+							planIntegrity = data.integrity as PlanIntegrity;
+							await revalidate();
+						} else {
+							await captureIntegrity();
+						}
 					}
 				}
 				break;
@@ -715,9 +1034,31 @@ export function activate(context: vscode.ExtensionContext): void {
 					const list = await storage.list();
 					sidebar.postMessage({
 						type: "saved_list",
-						walkthroughs: list.map(({ name, title }) => ({ name, title })),
+						walkthroughs: list.slice(0, 5).map(({ name, title }) => ({ name, title })),
 					});
 				}
+				break;
+			case "decision_answer":
+				answerDecision(msg.id, msg.answer);
+				break;
+			case "open_handoff":
+				openHandoff(msg.path);
+				break;
+			case "open_decisions_panel":
+				showDecisionsPanel();
+				break;
+			case "open_theater":
+				await openTheater();
+				break;
+			case "request_decisions":
+				pushDecisions();
+				break;
+			case "request_feed":
+				pushFeed();
+				break;
+			case "clear_feed":
+				feed.length = 0;
+				pushFeed();
 				break;
 			case "close_walkthrough": {
 				const wtState = walkthrough.getState();
@@ -730,22 +1071,47 @@ export function activate(context: vscode.ExtensionContext): void {
 					);
 					if (!choice) break; // dismissed
 					if (choice === "Save & Close") {
-						await vscode.commands.executeCommand('codeExplainer.saveWalkthrough');
+						await vscode.commands.executeCommand('brix.saveWalkthrough');
 					}
 				}
 				if (currentChunkAbort) { currentChunkAbort(); currentChunkAbort = undefined; }
 				fullAudioStop();
 				walkthrough.stop();
 				walkthroughSaved = false;
+				closeTheater();
 				break;
 			}
 		}
-	});
+	};
+
+	sidebar.setMessageHandler(handleWebviewMessage);
+	theater.setMessageHandler((msg) => { handleWebviewMessage(msg); });
+
+	// A walkthrough goes stale the moment its files change underneath it.
+	let revalidateTimer: ReturnType<typeof setTimeout> | undefined;
+	function scheduleRevalidate(changed: string): void {
+		if (!planIntegrity) return;
+		const files = new Set(walkthrough.getState().segments.map((seg) => seg.file));
+		if (!files.has(changed)) return;
+		if (revalidateTimer) clearTimeout(revalidateTimer);
+		revalidateTimer = setTimeout(() => { revalidate().catch(() => {}); }, 400);
+	}
+	context.subscriptions.push(
+		vscode.workspace.onDidSaveTextDocument((doc) => scheduleRevalidate(doc.uri.fsPath)),
+		vscode.workspace.onDidChangeTextDocument((e) => scheduleRevalidate(e.document.uri.fsPath)),
+	);
+
+	// Keep theater panels in step with the active tab
+	context.subscriptions.push(
+		vscode.window.tabGroups.onDidChangeTabs(() => syncTheaterVisibility()),
+		vscode.window.tabGroups.onDidChangeTabGroups(() => syncTheaterVisibility()),
+	);
 
 	// ── Cleanup ──
 
 	context.subscriptions.push({
 		dispose: () => {
+			for (const id of Array.from(watchedTasks.keys())) endWatchedTask(id);
 			server.stop();
 			if (fileWatcher) {
 				fs.unwatchFile(HIGHLIGHT_FILE);

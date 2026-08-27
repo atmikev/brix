@@ -1,54 +1,128 @@
 {
-	"name": "code-explainer",
-	"displayName": "Code Explainer",
+	"name": "brix",
+	"displayName": "Brix",
 	"description": "Interactive code walkthroughs with AI-powered voice narration and editor highlighting.",
 	"version": "0.2.0",
-	"publisher": "srujangurram",
+	"publisher": "atmikev",
 	"icon": "media/icon.png",
 	"engines": {
 		"vscode": "^1.85.0"
 	},
-	"categories": ["Other"],
-	"activationEvents": ["*"],
+	"categories": [
+		"Other"
+	],
+	"activationEvents": [
+		"*"
+	],
 	"main": "./out/extension.js",
 	"contributes": {
 		"commands": [
-			{ "command": "codeExplainer.togglePlayPause", "title": "Code Explainer: Toggle Play/Pause" },
-			{ "command": "codeExplainer.next", "title": "Code Explainer: Next Sub-segment" },
-			{ "command": "codeExplainer.prev", "title": "Code Explainer: Previous Sub-segment" },
-			{ "command": "codeExplainer.nextSegment", "title": "Code Explainer: Next Segment" },
-			{ "command": "codeExplainer.prevSegment", "title": "Code Explainer: Previous Segment" },
-			{ "command": "codeExplainer.stop", "title": "Code Explainer: Stop Walkthrough" },
-			{ "command": "codeExplainer.speedUp", "title": "Code Explainer: Speed Up" },
-			{ "command": "codeExplainer.speedDown", "title": "Code Explainer: Speed Down" },
-			{ "command": "codeExplainer.saveWalkthrough", "title": "Code Explainer: Save Walkthrough" },
-			{ "command": "codeExplainer.loadWalkthrough", "title": "Code Explainer: Load Walkthrough" }
+			{
+				"command": "brix.togglePlayPause",
+				"title": "Brix: Toggle Play/Pause"
+			},
+			{
+				"command": "brix.next",
+				"title": "Brix: Next Sub-segment"
+			},
+			{
+				"command": "brix.prev",
+				"title": "Brix: Previous Sub-segment"
+			},
+			{
+				"command": "brix.nextSegment",
+				"title": "Brix: Next Segment"
+			},
+			{
+				"command": "brix.prevSegment",
+				"title": "Brix: Previous Segment"
+			},
+			{
+				"command": "brix.stop",
+				"title": "Brix: Stop Walkthrough"
+			},
+			{
+				"command": "brix.speedUp",
+				"title": "Brix: Speed Up"
+			},
+			{
+				"command": "brix.speedDown",
+				"title": "Brix: Speed Down"
+			},
+			{
+				"command": "brix.saveWalkthrough",
+				"title": "Brix: Save Walkthrough"
+			},
+			{
+				"command": "brix.loadWalkthrough",
+				"title": "Brix: Load Walkthrough"
+			},
+			{
+				"command": "brix.openDecisions",
+				"title": "Brix: Open Decisions Panel"
+			},
+			{
+				"command": "brix.openTheater",
+				"title": "Brix: Open Theater View"
+			}
 		],
 		"keybindings": [
-			{ "command": "codeExplainer.togglePlayPause", "key": "ctrl+shift+space", "when": "codeExplainer.walkthroughActive" },
-			{ "command": "codeExplainer.next", "key": "ctrl+shift+]", "when": "codeExplainer.walkthroughActive" },
-			{ "command": "codeExplainer.prev", "key": "ctrl+shift+[", "when": "codeExplainer.walkthroughActive" },
-			{ "command": "codeExplainer.nextSegment", "key": "ctrl+shift+alt+]", "when": "codeExplainer.walkthroughActive" },
-			{ "command": "codeExplainer.prevSegment", "key": "ctrl+shift+alt+[", "when": "codeExplainer.walkthroughActive" },
-			{ "command": "codeExplainer.stop", "key": "ctrl+shift+\\", "when": "codeExplainer.walkthroughActive" },
-			{ "command": "codeExplainer.speedUp", "key": "ctrl+shift+=", "when": "codeExplainer.walkthroughActive" },
-			{ "command": "codeExplainer.speedDown", "key": "ctrl+shift+-", "when": "codeExplainer.walkthroughActive" }
+			{
+				"command": "brix.togglePlayPause",
+				"key": "ctrl+shift+space",
+				"when": "brix.walkthroughActive"
+			},
+			{
+				"command": "brix.next",
+				"key": "ctrl+shift+]",
+				"when": "brix.walkthroughActive"
+			},
+			{
+				"command": "brix.prev",
+				"key": "ctrl+shift+[",
+				"when": "brix.walkthroughActive"
+			},
+			{
+				"command": "brix.nextSegment",
+				"key": "ctrl+shift+alt+]",
+				"when": "brix.walkthroughActive"
+			},
+			{
+				"command": "brix.prevSegment",
+				"key": "ctrl+shift+alt+[",
+				"when": "brix.walkthroughActive"
+			},
+			{
+				"command": "brix.stop",
+				"key": "ctrl+shift+\\",
+				"when": "brix.walkthroughActive"
+			},
+			{
+				"command": "brix.speedUp",
+				"key": "ctrl+shift+=",
+				"when": "brix.walkthroughActive"
+			},
+			{
+				"command": "brix.speedDown",
+				"key": "ctrl+shift+-",
+				"when": "brix.walkthroughActive"
+			}
 		],
 		"viewsContainers": {
 			"activitybar": [
 				{
-					"id": "code-explainer",
-					"title": "Code Explainer",
+					"id": "brix",
+					"title": "Brix",
 					"icon": "media/icon.svg"
 				}
 			]
 		},
 		"views": {
-			"code-explainer": [
+			"brix": [
 				{
 					"type": "webview",
-					"id": "codeExplainer.sidebar",
-					"name": "Code Explainer"
+					"id": "brix.sidebar",
+					"name": "Brix"
 				}
 			]
 		}

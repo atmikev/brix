@@ -32,12 +32,12 @@ Synthesize the entire walkthrough into a single WAV file. No sidebar or highligh
 cat > /tmp/walkthrough-plan.json << 'PLAN_EOF'
 { "title": "...", "voice": "af_heart", "speed": 1.0, "segments": [...] }
 PLAN_EOF
-python3 ~/.claude/skills/explainer/scripts/podcast.py /tmp/walkthrough-plan.json
+python3 ~/.claude/skills/brix/scripts/podcast.py /tmp/walkthrough-plan.json
 ```
 
 Optional custom output path:
 ```bash
-python3 ~/.claude/skills/explainer/scripts/podcast.py /tmp/walkthrough-plan.json ~/Desktop/auth-walkthrough.wav
+python3 ~/.claude/skills/brix/scripts/podcast.py /tmp/walkthrough-plan.json ~/Desktop/auth-walkthrough.wav
 ```
 
 3. **Tell user the file path.** Offer to play: `open ./feature-name-walkthrough-podcast.wav`

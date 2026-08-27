@@ -76,14 +76,14 @@ export function setWorkspaceRoot(root: string): void {
 	workspaceRoot = root;
 }
 
-/** Known locations to search for the code-explainer project root. */
+/** Known locations to search for the brix project root. */
 function getProjectRootCandidates(): string[] {
 	const candidates: string[] = [];
 	if (workspaceRoot) candidates.push(workspaceRoot);
 	const home = process.env.HOME || "";
 	if (home) {
 		// Skills directory (installed via claude skill)
-		candidates.push(path.join(home, ".claude", "skills", "explainer"));
+		candidates.push(path.join(home, ".claude", "skills", "brix"));
 	}
 	return candidates;
 }

@@ -8,7 +8,7 @@ For each segment:
 
 Sidebar active (from step 0):
 ```bash
-~/.claude/skills/explainer/scripts/explainer.sh send '{"type": "goto", "segmentId": {id}}'
+~/.claude/skills/brix/scripts/brix.sh send '{"type": "goto", "segmentId": {id}}'
 ```
 
 Fallback (no sidebar):

@@ -12,182 +12,6 @@ let state = {
 	status: "idle",
 };
 
-// ── Audio player ──
-
-/** @type {AudioContext | null} */
-let audioCtx = null;
-/** @type {GainNode | null} */
-let gainNode = null;
-let nextPlayTime = 0;
-/** @type {AudioBufferSourceNode[]} */
-let activeSources = [];
-// Speed is handled by TTS server; Web Audio plays at 1x
-let volume = 0.8;
-let muted = false;
-let audioPlaying = false;
-/** True when audio was intentionally suspended via suspendAudio() (user pause). */
-let intentionallySuspended = false;
-let currentHighlightIndex = 0;
-let totalHighlights = 0;
-/** True when audio_end arrived but chunks are still pending (AudioContext suspended) */
-let deferredPlaybackComplete = false;
-/** Guard: true while waitForActiveSourcesToFinish has a pending wrapper or sent playback_complete */
-let playbackCompleteWired = false;
-
-/** @type {{base64: string, sampleRate: number}[]} */
-let pendingChunks = [];
-
-function ensureAudioContext() {
-	if (!audioCtx) {
-		audioCtx = new AudioContext({ sampleRate: 24000 });
-		gainNode = audioCtx.createGain();
-		gainNode.gain.value = muted ? 0 : volume;
-		gainNode.connect(audioCtx.destination);
-	}
-	if (audioCtx.state === "suspended" && !intentionallySuspended) {
-		audioCtx.resume().then(() => {
-			// Flush any chunks that arrived while suspended
-			const chunks = pendingChunks.slice();
-			pendingChunks = [];
-			for (const chunk of chunks) {
-				playAudioChunk(chunk.base64, chunk.sampleRate);
-			}
-			// If audio_end arrived while suspended, now handle deferred playback completion
-			if (deferredPlaybackComplete) {
-				deferredPlaybackComplete = false;
-				waitForActiveSourcesToFinish();
-			}
-		});
-	}
-}
-
-// Pre-warm AudioContext on first user interaction so it's ready when audio arrives
-document.addEventListener("click", () => ensureAudioContext(), { once: true });
-
-
-function playAudioChunk(base64Data, sampleRate) {
-	ensureAudioContext();
-
-	// If AudioContext is still suspended (no user gesture yet), queue the chunk
-	if (audioCtx.state === "suspended") {
-		pendingChunks.push({ base64: base64Data, sampleRate });
-		return;
-	}
-
-	const binary = atob(base64Data);
-	const bytes = new Uint8Array(binary.length);
-	for (let i = 0; i < binary.length; i++) {
-		bytes[i] = binary.charCodeAt(i);
-	}
-	const float32 = new Float32Array(bytes.buffer);
-
-	const buffer = audioCtx.createBuffer(1, float32.length, sampleRate);
-	buffer.getChannelData(0).set(float32);
-
-	const source = audioCtx.createBufferSource();
-	source.buffer = buffer;
-	source.playbackRate.value = 1;
-	source.connect(gainNode);
-
-	const now = audioCtx.currentTime;
-	if (nextPlayTime < now) nextPlayTime = now;
-	source.start(nextPlayTime);
-	nextPlayTime += buffer.duration;
-
-	activeSources.push(source);
-	source.onended = () => {
-		const idx = activeSources.indexOf(source);
-		if (idx !== -1) activeSources.splice(idx, 1);
-		vscode.postMessage({ type: "chunk_played" });
-	};
-
-	audioPlaying = true;
-}
-
-function stopAudio() {
-	intentionallySuspended = false;
-	for (const source of activeSources) {
-		// Clear onended BEFORE stopping to prevent stale playback_complete messages.
-		// Without this, wrapped onended callbacks (from waitForActiveSourcesToFinish)
-		// fire and send playback_complete which can resolve the NEXT chunk's promise,
-		// causing the highlight loop to skip subsegments and leak orphaned TTS streams.
-		source.onended = null;
-		try { source.stop(); } catch {}
-	}
-	activeSources = [];
-	pendingChunks = [];
-	nextPlayTime = 0;
-	audioPlaying = false;
-	deferredPlaybackComplete = false;
-	playbackCompleteWired = false;
-}
-
-/** Suspend AudioContext to freeze audio in place (pause mid-highlight). */
-function suspendAudio() {
-	if (audioCtx && audioCtx.state === "running") {
-		intentionallySuspended = true;
-		audioCtx.suspend();
-	}
-	// Don't clear sources or nextPlayTime — we want to resume from here
-}
-
-/** Resume AudioContext and wait for remaining buffered audio to finish. */
-function resumeAudio() {
-	intentionallySuspended = false;
-	if (audioCtx && audioCtx.state === "suspended") {
-		// Always resume the AudioContext so subsequent playAudioChunk() calls
-		// don't silently push to pendingChunks instead of playing.
-		audioCtx.resume().then(() => {
-			waitForActiveSourcesToFinish();
-		});
-	} else {
-		// Nothing to resume — signal immediately so extension can re-stream
-		vscode.postMessage({ type: "playback_complete" });
-	}
-}
-
-/**
- * Wait for all active audio sources to finish, then send playback_complete.
- * If no sources are active (already drained), sends immediately.
- * Idempotent: safe to call multiple times (onAudioEnd + resumeAudio) —
- * only the first call wires the wrapper; subsequent calls are no-ops.
- */
-function waitForActiveSourcesToFinish() {
-	if (playbackCompleteWired || intentionallySuspended) return;
-	playbackCompleteWired = true;
-	if (activeSources.length === 0) {
-		audioPlaying = false;
-		playbackCompleteWired = false;
-		vscode.postMessage({ type: "playback_complete" });
-		return;
-	}
-	const lastSource = activeSources[activeSources.length - 1];
-	const originalOnEnded = lastSource.onended;
-	lastSource.onended = (e) => {
-		if (originalOnEnded) originalOnEnded.call(lastSource, e);
-		audioPlaying = false;
-		playbackCompleteWired = false;
-		vscode.postMessage({ type: "playback_complete" });
-	};
-}
-
-function onAudioEnd() {
-	// Wait for actual Web Audio playback to finish,
-	// then signal the extension so it can advance to the next sub-highlight.
-	// If chunks are still pending (AudioContext suspended), defer until they're flushed.
-	if (pendingChunks.length > 0) {
-		deferredPlaybackComplete = true;
-		return;
-	}
-	waitForActiveSourcesToFinish();
-}
-
-function updateVolume() {
-	if (gainNode) {
-		gainNode.gain.value = muted ? 0 : volume;
-	}
-}
-
 // ── UI rendering ──
 
 function showDoneView() {
@@ -405,6 +229,224 @@ function renderOutline(currentIdx) {
 	}
 }
 
+// ── Decisions (human-in-the-loop) ──
+
+/** @type {Array<any>} */
+let decisions = [];
+
+/** ids currently shown as open — lets us animate their departure once answered */
+const seenOpenDecisions = new Set();
+/** id -> timestamp when it was first observed answered */
+const departingDecisions = new Map();
+/** total lifetime of an answered card: confirmation hold + fade */
+const DEPART_MS = 5000;
+const DEPART_FADE_MS = 700;
+let departTimer = null;
+
+function renderDecisions() {
+	const section = document.getElementById("decisions-section");
+	const list = document.getElementById("decisions-list");
+	const count = document.getElementById("decisions-count");
+	const now = Date.now();
+
+	// An answered card we had shown as open lingers briefly with its ✓,
+	// then fades — vanishing on click reads as harsh. Answered decisions
+	// that were never on screen (e.g. after a reload) skip the farewell.
+	for (const d of decisions) {
+		if (d.status === "open") {
+			seenOpenDecisions.add(d.id);
+			departingDecisions.delete(d.id);
+		} else if (seenOpenDecisions.has(d.id) && !departingDecisions.has(d.id)) {
+			departingDecisions.set(d.id, now);
+		}
+	}
+	for (const [id, at] of Array.from(departingDecisions)) {
+		if (now - at >= DEPART_MS) {
+			departingDecisions.delete(id);
+			seenOpenDecisions.delete(id);
+		}
+	}
+
+	const open = decisions.filter((d) => d.status === "open");
+	const leaving = decisions.filter((d) => departingDecisions.has(d.id));
+	const visible = open.concat(leaving);
+
+	// Keep the section — and its history affordance — as long as any decision
+	// exists this session. Only a never-used queue hides completely.
+	if (decisions.length === 0) {
+		section.style.display = "none";
+		return;
+	}
+	section.style.display = "";
+	count.textContent = open.length > 0 ? String(open.length) : "";
+
+	list.innerHTML = "";
+
+	if (visible.length === 0) {
+		const answered = decisions.length;
+		const empty = document.createElement("button");
+		empty.className = "decisions-empty";
+		empty.title = "Open all decisions in editor";
+		const line1 = document.createElement("span");
+		line1.className = "decisions-empty-title";
+		line1.textContent = "Nothing waiting on you";
+		const line2 = document.createElement("span");
+		line2.className = "decisions-empty-hint";
+		line2.textContent = answered + (answered === 1 ? " answered" : " answered") + " this session — view history";
+		empty.appendChild(line1);
+		empty.appendChild(line2);
+		empty.addEventListener("click", () => vscode.postMessage({ type: "open_decisions_panel" }));
+		list.appendChild(empty);
+		if (departTimer) { clearTimeout(departTimer); departTimer = null; }
+		return;
+	}
+
+	for (const d of visible) {
+		const isLeaving = departingDecisions.has(d.id);
+		const card = document.createElement("div");
+		card.className = "decision-card" + (isLeaving ? " answered leaving" : "");
+		if (isLeaving) {
+			const elapsed = now - departingDecisions.get(d.id);
+			card.style.animationDelay = Math.max(0, DEPART_MS - DEPART_FADE_MS - elapsed) + "ms";
+		}
+
+		const title = document.createElement("div");
+		title.className = "decision-title";
+		title.textContent = d.title;
+		card.appendChild(title);
+
+		const ctx = document.createElement("div");
+		ctx.className = "decision-context";
+		ctx.innerHTML = simpleMarkdown(d.context);
+		card.appendChild(ctx);
+
+		if (d.handoffPath) {
+			const link = document.createElement("a");
+			link.className = "decision-handoff";
+			link.href = "#";
+			link.textContent = d.handoffPath;
+			link.addEventListener("click", (e) => {
+				e.preventDefault();
+				vscode.postMessage({ type: "open_handoff", path: d.handoffPath });
+			});
+			card.appendChild(link);
+		}
+
+		if (isLeaving) {
+			const ans = document.createElement("div");
+			ans.className = "decision-answer";
+			ans.textContent = "✓ " + (d.answer || "answered");
+			card.appendChild(ans);
+		} else {
+			const opts = document.createElement("div");
+			opts.className = "decision-options";
+			for (const opt of d.options || []) {
+				const btn = document.createElement("button");
+				btn.className = "decision-opt" + (opt.recommended ? " recommended" : "");
+				btn.textContent = opt.label + (opt.recommended ? " ★" : "");
+				if (opt.detail) btn.title = opt.detail;
+				btn.addEventListener("click", () => {
+					vscode.postMessage({ type: "decision_answer", id: d.id, answer: opt.label });
+				});
+				opts.appendChild(btn);
+			}
+			card.appendChild(opts);
+
+			const custom = document.createElement("div");
+			custom.className = "decision-custom";
+			const input = document.createElement("input");
+			input.type = "text";
+			input.placeholder = "Or answer in your own words…";
+			const send = document.createElement("button");
+			send.textContent = "Send";
+			const submit = () => {
+				const v = input.value.trim();
+				if (v) vscode.postMessage({ type: "decision_answer", id: d.id, answer: v });
+			};
+			send.addEventListener("click", submit);
+			input.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+			custom.appendChild(input);
+			custom.appendChild(send);
+			card.appendChild(custom);
+		}
+
+		list.appendChild(card);
+	}
+
+	// Re-render when the soonest farewell ends, to sweep it out of the DOM.
+	if (departTimer) clearTimeout(departTimer);
+	departTimer = null;
+	if (departingDecisions.size > 0) {
+		let soonest = Infinity;
+		for (const at of departingDecisions.values()) {
+			soonest = Math.min(soonest, at + DEPART_MS - now);
+		}
+		departTimer = setTimeout(renderDecisions, Math.max(50, soonest));
+	}
+}
+
+// ── Distilled transcript feed ──
+
+/** @type {Array<any>} */
+let feedItems = [];
+
+function renderFeed() {
+	const section = document.getElementById("feed-section");
+	const list = document.getElementById("feed-list");
+
+	if (feedItems.length === 0) {
+		section.style.display = "none";
+		return;
+	}
+	section.style.display = "";
+	list.innerHTML = "";
+
+	for (const item of feedItems) {
+		const row = document.createElement("div");
+		row.className = "feed-item kind-" + item.kind;
+
+		const head = document.createElement("div");
+		head.className = "feed-item-head";
+
+		const pill = document.createElement("span");
+		pill.className = "feed-pill";
+		pill.textContent = item.kind;
+		head.appendChild(pill);
+
+		const time = document.createElement("span");
+		time.className = "feed-time";
+		time.textContent = new Date(item.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+		head.appendChild(time);
+
+		row.appendChild(head);
+
+		const title = document.createElement("div");
+		title.className = "feed-title";
+		title.textContent = item.title;
+		row.appendChild(title);
+
+		if (item.body) {
+			const body = document.createElement("div");
+			body.className = "feed-body";
+			body.innerHTML = simpleMarkdown(item.body);
+			row.appendChild(body);
+		}
+
+		if (item.source) {
+			const src = document.createElement("div");
+			src.className = "feed-source";
+			src.textContent = item.source;
+			row.appendChild(src);
+		}
+
+		list.appendChild(row);
+	}
+}
+
+document.getElementById("feed-clear").addEventListener("click", () => {
+	vscode.postMessage({ type: "clear_feed" });
+});
+
 function simpleMarkdown(text) {
 	if (!text) return "";
 	return text
@@ -506,6 +548,10 @@ document.getElementById("btn-prev").addEventListener("click", () => {
 
 document.getElementById("btn-restart").addEventListener("click", () => {
 	vscode.postMessage({ type: "restart" });
+});
+
+document.getElementById("btn-theater").addEventListener("click", () => {
+	vscode.postMessage({ type: "open_theater" });
 });
 
 document.getElementById("btn-save").addEventListener("click", () => {
@@ -616,6 +662,12 @@ window.addEventListener("message", (event) => {
 			break;
 		}
 
+		case "set_volume":
+			volume = msg.volume;
+			updateVolume();
+			document.getElementById("volume-slider").value = String(Math.round(volume * 100));
+			break;
+
 		case "audio_chunk": {
 			const playBtn = document.getElementById("btn-play-pause");
 			playBtn.classList.remove("loading");
@@ -641,6 +693,32 @@ window.addEventListener("message", (event) => {
 			resumeAudio();
 			break;
 
+		case "validity": {
+			const banner = document.getElementById("validity-banner");
+			const v = msg.validity;
+			if (!v || v.overall === "fresh" || v.overall === "unknown") {
+				banner.style.display = "none";
+			} else {
+				const stale = Object.values(v.segments || {}).filter((x) => x.state === "stale").length;
+				banner.style.display = "";
+				banner.className = "validity-banner " + (stale ? "stale" : "shifted");
+				banner.textContent = stale
+					? "\u26A0 " + stale + " segment" + (stale === 1 ? "" : "s") + " no longer match the code. Ask your agent to regenerate this walkthrough."
+					: "\u21C5 Code moved since this walkthrough was made \u2014 line positions were adjusted automatically.";
+			}
+			break;
+		}
+
+		case "decisions":
+			decisions = msg.decisions;
+			renderDecisions();
+			break;
+
+		case "feed":
+			feedItems = msg.items;
+			renderFeed();
+			break;
+
 		case "saved_list": {
 			const section = document.getElementById("saved-list-section");
 			const list = document.getElementById("saved-list");
@@ -664,5 +742,11 @@ window.addEventListener("message", (event) => {
 	}
 });
 
+document.getElementById("decisions-expand").addEventListener("click", () => {
+	vscode.postMessage({ type: "open_decisions_panel" });
+});
+
 // Initial render
 render();
+vscode.postMessage({ type: "request_decisions" });
+vscode.postMessage({ type: "request_feed" });

@@ -92,7 +92,7 @@ Not this — one highlight per line, self-contained statements that sound choppy
 Do NOT send anything to the sidebar until every agent has returned. Each agent writes its segment to `$TMPDIR/segment-{id}.json`. Once all agents finish, assemble and send with one bash command:
 
 ```bash
-jq -n --arg title "{feature} Walkthrough" '{ type: "set_plan", title: $title, segments: [inputs] }' $(for i in $(seq 0 {lastSegmentId}); do echo "$TMPDIR/segment-$i.json"; done) > "$TMPDIR/walkthrough-plan.json" && ~/.claude/skills/explainer/scripts/explainer.sh plan "$TMPDIR/walkthrough-plan.json" && rm -rf "$TMPDIR"
+jq -n --arg title "{feature} Walkthrough" '{ type: "set_plan", title: $title, segments: [inputs] }' $(for i in $(seq 0 {lastSegmentId}); do echo "$TMPDIR/segment-$i.json"; done) > "$TMPDIR/walkthrough-plan.json" && ~/.claude/skills/brix/scripts/brix.sh plan "$TMPDIR/walkthrough-plan.json" && rm -rf "$TMPDIR"
 ```
 
 This avoids the main agent having to parse or re-serialize any segment JSON — `jq` handles assembly directly from the files the sub-agents wrote. The `rm -rf` at the end cleans up the temp directory.

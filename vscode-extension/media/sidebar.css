@@ -14,6 +14,17 @@ body {
 	font-size: var(--vscode-font-size);
 	color: var(--vscode-foreground);
 	padding: 12px;
+	/* Decisions/feed sections stack above the views; each view flexes into
+	   the remaining height so inner regions (outline, feed) own the scroll. */
+	display: flex;
+	flex-direction: column;
+}
+
+#idle-view,
+#done-view {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
 }
 
 /* ── Active view layout ── */
@@ -21,7 +32,8 @@ body {
 #active-view {
 	display: flex;
 	flex-direction: column;
-	height: calc(100vh - 24px); /* account for body padding */
+	flex: 1;
+	min-height: 0;
 }
 
 .sticky-top {
@@ -562,4 +574,331 @@ body {
 
 .saved-item:hover::before {
 	opacity: 1;
+}
+
+/* ── Decisions (human-in-the-loop) ── */
+
+#decisions-section {
+	flex-shrink: 0;
+	max-height: 45vh;
+	overflow-y: auto;
+	padding: 10px 12px;
+	border-bottom: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.25));
+	background: var(--vscode-sideBar-background);
+}
+
+.decisions-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+
+.decisions-label {
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.1em;
+	color: var(--vscode-descriptionForeground);
+}
+
+.decisions-count {
+	min-width: 16px;
+	height: 16px;
+	padding: 0 5px;
+	border-radius: 8px;
+	background: var(--vscode-activityBarBadge-background, #c72e2e);
+	color: var(--vscode-activityBarBadge-foreground, #fff);
+	font-size: 10px;
+	font-weight: 700;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.decisions-count:empty { display: none; }
+
+.decision-card {
+	border: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.25));
+	border-left: 3px solid var(--vscode-charts-orange, #e2a144);
+	border-radius: 5px;
+	padding: 9px 10px;
+	margin-bottom: 8px;
+	background: var(--vscode-editorWidget-background, transparent);
+}
+
+.decision-card.answered {
+	opacity: 0.65;
+	border-left-color: var(--vscode-charts-green, #58b586);
+}
+
+.decision-title {
+	font-weight: 600;
+	font-size: 12.5px;
+	line-height: 1.35;
+	margin-bottom: 5px;
+}
+
+.decision-context {
+	font-size: 11.5px;
+	line-height: 1.45;
+	color: var(--vscode-descriptionForeground);
+	margin-bottom: 7px;
+}
+
+.decision-handoff {
+	display: block;
+	font-size: 10.5px;
+	font-family: var(--vscode-editor-font-family, monospace);
+	color: var(--vscode-textLink-foreground);
+	margin-bottom: 7px;
+	text-decoration: none;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.decision-handoff:hover { text-decoration: underline; }
+
+.decision-options {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 5px;
+	margin-bottom: 7px;
+}
+
+.decision-opt {
+	border: 1px solid var(--vscode-button-border, transparent);
+	background: var(--vscode-button-secondaryBackground, rgba(128,128,128,0.2));
+	color: var(--vscode-button-secondaryForeground, inherit);
+	border-radius: 4px;
+	padding: 4px 9px;
+	font-size: 11.5px;
+	cursor: pointer;
+}
+
+.decision-opt:hover {
+	background: var(--vscode-button-secondaryHoverBackground, rgba(128,128,128,0.35));
+}
+
+.decision-opt.recommended {
+	background: var(--vscode-button-background);
+	color: var(--vscode-button-foreground);
+}
+
+.decision-opt.recommended:hover {
+	background: var(--vscode-button-hoverBackground);
+}
+
+.decision-custom {
+	display: flex;
+	gap: 5px;
+}
+
+.decision-custom input {
+	flex: 1;
+	min-width: 0;
+	background: var(--vscode-input-background);
+	color: var(--vscode-input-foreground);
+	border: 1px solid var(--vscode-input-border, transparent);
+	border-radius: 4px;
+	padding: 4px 7px;
+	font-size: 11.5px;
+}
+
+.decision-custom input::placeholder {
+	color: var(--vscode-input-placeholderForeground);
+}
+
+.decision-custom button {
+	border: none;
+	background: var(--vscode-button-secondaryBackground, rgba(128,128,128,0.2));
+	color: var(--vscode-button-secondaryForeground, inherit);
+	border-radius: 4px;
+	padding: 4px 9px;
+	font-size: 11.5px;
+	cursor: pointer;
+}
+
+.decision-answer {
+	font-size: 11.5px;
+	font-weight: 600;
+	color: var(--vscode-charts-green, #58b586);
+}
+
+/* ── Distilled transcript feed ── */
+
+#feed-section {
+	flex-shrink: 0;
+	padding: 10px 12px;
+	border-bottom: 1px solid var(--vscode-panel-border, rgba(128,128,128,0.25));
+	background: var(--vscode-sideBar-background);
+	max-height: 30vh;
+	overflow-y: auto;
+}
+
+.feed-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 8px;
+}
+
+.feed-label {
+	font-size: 10px;
+	font-weight: 700;
+	letter-spacing: 0.1em;
+	color: var(--vscode-descriptionForeground);
+}
+
+.feed-clear {
+	border: none;
+	background: none;
+	color: var(--vscode-descriptionForeground);
+	font-size: 10px;
+	cursor: pointer;
+	padding: 2px 4px;
+}
+
+.feed-clear:hover { color: var(--vscode-foreground); }
+
+.feed-item {
+	padding: 7px 0 7px 10px;
+	border-left: 2px solid var(--vscode-panel-border, rgba(128,128,128,0.25));
+	margin-bottom: 6px;
+}
+
+.feed-item.kind-finding { border-left-color: var(--vscode-charts-orange, #e2a144); }
+.feed-item.kind-answer { border-left-color: var(--vscode-charts-green, #58b586); }
+.feed-item.kind-status { border-left-color: var(--vscode-charts-blue, #7fa1d8); }
+.feed-item.kind-progress { border-left-color: var(--vscode-panel-border, rgba(128,128,128,0.25)); }
+
+.feed-item-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 2px;
+}
+
+.feed-pill {
+	font-size: 9px;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--vscode-descriptionForeground);
+}
+
+.feed-item.kind-finding .feed-pill { color: var(--vscode-charts-orange, #e2a144); }
+.feed-item.kind-answer .feed-pill { color: var(--vscode-charts-green, #58b586); }
+.feed-item.kind-status .feed-pill { color: var(--vscode-charts-blue, #7fa1d8); }
+
+.feed-time {
+	font-size: 9.5px;
+	color: var(--vscode-descriptionForeground);
+	opacity: 0.7;
+}
+
+.feed-title {
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 1.35;
+}
+
+.feed-item.kind-progress .feed-title {
+	font-weight: 400;
+	font-size: 11px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.feed-body {
+	font-size: 11.5px;
+	line-height: 1.45;
+	color: var(--vscode-descriptionForeground);
+	margin-top: 3px;
+}
+
+.feed-source {
+	font-size: 9.5px;
+	font-family: var(--vscode-editor-font-family, monospace);
+	color: var(--vscode-descriptionForeground);
+	opacity: 0.7;
+	margin-top: 3px;
+}
+
+.decisions-expand {
+	margin-left: auto;
+	background: none;
+	border: none;
+	color: var(--vscode-descriptionForeground);
+	cursor: pointer;
+	padding: 2px;
+	display: flex;
+	align-items: center;
+}
+
+.decisions-expand:hover {
+	color: var(--vscode-foreground);
+}
+
+/* Answered cards hold their ✓ briefly, then fade out (see DEPART_MS). */
+.decision-card.leaving {
+	pointer-events: none;
+	animation: decision-depart 700ms ease forwards;
+}
+
+@keyframes decision-depart {
+	to { opacity: 0; transform: translateX(8px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.decision-card.leaving { animation: none; opacity: 0.65; }
+}
+
+/* Empty queue: keep a quiet affordance so history stays reachable. */
+.decisions-empty {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	width: 100%;
+	text-align: left;
+	background: none;
+	border: 1px dashed var(--vscode-panel-border, rgba(128,128,128,0.3));
+	border-radius: 5px;
+	padding: 8px 10px;
+	color: var(--vscode-foreground);
+	cursor: pointer;
+	transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.decisions-empty:hover {
+	background: var(--vscode-toolbar-hoverBackground);
+	border-color: var(--vscode-focusBorder);
+}
+
+.decisions-empty-title {
+	font-size: 0.9em;
+	opacity: 0.75;
+}
+
+.decisions-empty-hint {
+	font-size: 0.8em;
+	opacity: 0.5;
+}
+
+/* Walkthrough freshness */
+.validity-banner {
+	font-size: 0.8em;
+	line-height: 1.4;
+	padding: 6px 8px;
+	border-radius: 4px;
+	margin-bottom: 8px;
+}
+
+.validity-banner.stale {
+	background: var(--vscode-inputValidation-errorBackground, rgba(200,70,50,0.15));
+	border: 1px solid var(--vscode-inputValidation-errorBorder, rgba(200,70,50,0.5));
+}
+
+.validity-banner.shifted {
+	background: var(--vscode-inputValidation-warningBackground, rgba(220,160,40,0.13));
+	border: 1px solid var(--vscode-inputValidation-warningBorder, rgba(220,160,40,0.5));
 }

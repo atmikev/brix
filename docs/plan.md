@@ -40,6 +40,7 @@ For each segment output:
 }
 
 Rules:
+- Segment 1 is ALWAYS an orientation segment, and it is SHORT: **4 short sentences maximum across the whole segment** (~20 seconds spoken), 1-2 highlights. Anchor it on the entry point (or most central file). Say what this feature does and the route ahead ("we'll follow the request into the service, then the store") — nothing else. No line-by-line detail, no history, no caveats. The listener needs a map, not a preamble; if you can cut a sentence, cut it.
 - Order by pedagogical flow, not just call order. Sometimes it's clearer to show the data shape before the code that creates it.
 - Keep [wiring] segments brief — flag them so the segment agent breezes through.
 - The narrativeHook should give the segment agent a concrete angle, not just "explain this file".

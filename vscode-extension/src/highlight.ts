@@ -29,6 +29,17 @@ const gapDecoration = vscode.window.createTextEditorDecorationType({
 	borderColor: "rgba(255, 190, 60, 0.2)",
 });
 
+// Which editor group walkthrough code opens in. Theater mode pins it to the
+// main group so highlights never land in the outline/controls panels.
+let targetColumn: vscode.ViewColumn | undefined;
+let preserveFocusOnShow = false;
+
+/** Pin (or unpin) the editor group used for walkthrough code. */
+export function setHighlightTarget(column: vscode.ViewColumn | undefined, preserveFocus = false): void {
+	targetColumn = column;
+	preserveFocusOnShow = preserveFocus;
+}
+
 // Track current segment range for computing dim regions
 let currentSegmentStart = 0;
 let currentSegmentEnd = 0;
@@ -99,7 +110,8 @@ export async function highlightSegmentRange(
 	const doc = await vscode.workspace.openTextDocument(uri);
 	const editor = await vscode.window.showTextDocument(doc, {
 		preview: false,
-		preserveFocus: false,
+		preserveFocus: preserveFocusOnShow,
+		viewColumn: targetColumn,
 	});
 
 	// Dim everything outside the segment
@@ -136,7 +148,8 @@ export async function highlightSubRange(
 	const doc = await vscode.workspace.openTextDocument(uri);
 	const editor = await vscode.window.showTextDocument(doc, {
 		preview: false,
-		preserveFocus: false,
+		preserveFocus: preserveFocusOnShow,
+		viewColumn: targetColumn,
 	});
 
 	// Expand effective segment range to encompass all highlights so that
@@ -213,7 +226,8 @@ export async function highlightRange(
 	const doc = await vscode.workspace.openTextDocument(uri);
 	const editor = await vscode.window.showTextDocument(doc, {
 		preview: false,
-		preserveFocus: false,
+		preserveFocus: preserveFocusOnShow,
+		viewColumn: targetColumn,
 	});
 
 	const startPos = new vscode.Position(zeroStart, 0);

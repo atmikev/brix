@@ -17,6 +17,38 @@ export interface Segment {
 	highlights: Highlight[];
 }
 
+// ── Decisions (human-in-the-loop) ──
+
+export interface DecisionOption {
+	label: string;
+	detail?: string;
+	recommended?: boolean;
+}
+
+export interface Decision {
+	id: string;              // stable slug, doubles as the handoff doc slug
+	title: string;           // one-line question
+	context: string;         // 2-3 sentence distilled context
+	options: DecisionOption[];
+	handoffPath?: string;    // e.g. docs/handoffs/2026-08-26-storage-backend.md
+	status: "open" | "answered";
+	answer?: string;
+	raisedAt: number;        // epoch ms
+}
+
+// ── Distilled transcript feed ──
+
+export type FeedKind = "finding" | "answer" | "status" | "progress" | "info";
+
+export interface FeedItem {
+	id: string;
+	kind: FeedKind;
+	title: string;
+	body?: string;
+	source?: string; // e.g. "review scout", "task:migration"
+	ts: number;      // epoch ms
+}
+
 // ── Agent → Extension messages (HTTP + WS) ──
 
 export interface SetPlanMessage {
@@ -55,6 +87,47 @@ export interface StopMessage {
 	type: "stop";
 }
 
+export interface RaiseDecisionMessage {
+	type: "raise_decision";
+	decision: {
+		id: string;
+		title: string;
+		context: string;
+		options: DecisionOption[];
+		handoffPath?: string;
+	};
+}
+
+export interface ResolveDecisionMessage {
+	type: "resolve_decision";
+	id: string;
+	answer?: string; // omit to withdraw/clear the decision instead
+}
+
+export interface PostUpdateMessage {
+	type: "post_update";
+	item: {
+		id?: string;
+		kind: FeedKind;
+		title: string;
+		body?: string;
+		source?: string;
+	};
+}
+
+export interface WatchTaskMessage {
+	type: "watch_task";
+	id: string;
+	title: string;
+	intervalSec?: number; // default 300, min 60
+}
+
+export interface EndTaskMessage {
+	type: "end_task";
+	id: string;
+	summary?: string;
+}
+
 export type AgentMessage =
 	| SetPlanMessage
 	| InsertAfterMessage
@@ -62,7 +135,12 @@ export type AgentMessage =
 	| RemoveSegmentsMessage
 	| GotoMessage
 	| ResumeMessage
-	| StopMessage;
+	| StopMessage
+	| RaiseDecisionMessage
+	| ResolveDecisionMessage
+	| PostUpdateMessage
+	| WatchTaskMessage
+	| EndTaskMessage;
 
 // ── Extension → Agent messages ──
 
@@ -75,12 +153,32 @@ export interface StateMessage {
 	totalSegments: number;
 }
 
-export interface UserActionMessage {
+export interface UserQuestionActionMessage {
 	type: "user_action";
 	action: "ask_question";
 	segmentId: number;
 	question?: string;
 }
+
+export interface DecisionAnsweredActionMessage {
+	type: "user_action";
+	action: "decision_answered";
+	decisionId: string;
+	answer: string;
+	handoffPath?: string;
+}
+
+export interface StatusRequestActionMessage {
+	type: "user_action";
+	action: "status_request";
+	taskId: string;
+	title: string;
+}
+
+export type UserActionMessage =
+	| UserQuestionActionMessage
+	| DecisionAnsweredActionMessage
+	| StatusRequestActionMessage;
 
 export type ExtensionMessage = StateMessage | UserActionMessage;
 
@@ -133,7 +231,31 @@ export interface WebviewSavedListMessage {
 	walkthroughs: Array<{ name: string; title: string }>;
 }
 
+export interface WebviewSetVolumeMessage {
+	type: "set_volume";
+	volume: number;
+}
+
+export interface WebviewDecisionsMessage {
+	type: "decisions";
+	decisions: Decision[];
+}
+
+export interface WebviewFeedMessage {
+	type: "feed";
+	items: FeedItem[];
+}
+
+export interface WebviewValidityMessage {
+	type: "validity";
+	validity: import("./integrity").PlanValidity | null;
+}
+
 export type ToWebviewMessage =
+	| WebviewDecisionsMessage
+	| WebviewFeedMessage
+	| WebviewValidityMessage
+	| WebviewSetVolumeMessage
 	| WebviewUpdateMessage
 	| WebviewAudioChunkMessage
 	| WebviewAudioEndMessage
@@ -217,7 +339,45 @@ export interface WebviewCloseWalkthroughMessage {
 	type: "close_walkthrough";
 }
 
+export interface WebviewDecisionAnswerMessage {
+	type: "decision_answer";
+	id: string;
+	answer: string;
+}
+
+export interface WebviewOpenHandoffMessage {
+	type: "open_handoff";
+	path: string;
+}
+
+export interface WebviewRequestDecisionsMessage {
+	type: "request_decisions";
+}
+
+export interface WebviewRequestFeedMessage {
+	type: "request_feed";
+}
+
+export interface WebviewClearFeedMessage {
+	type: "clear_feed";
+}
+
+export interface WebviewOpenDecisionsPanelMessage {
+	type: "open_decisions_panel";
+}
+
+export interface WebviewOpenTheaterMessage {
+	type: "open_theater";
+}
+
 export type FromWebviewMessage =
+	| WebviewDecisionAnswerMessage
+	| WebviewOpenHandoffMessage
+	| WebviewRequestDecisionsMessage
+	| WebviewRequestFeedMessage
+	| WebviewClearFeedMessage
+	| WebviewOpenDecisionsPanelMessage
+	| WebviewOpenTheaterMessage
 	| WebviewPlayPauseMessage
 	| WebviewNextMessage
 	| WebviewPrevMessage

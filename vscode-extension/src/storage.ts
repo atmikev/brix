@@ -5,6 +5,8 @@ import { Segment } from "./types";
 export interface WalkthroughFile {
 	title: string;
 	segments: Segment[];
+	/** Snapshot of the code this plan was built against (see integrity.ts). */
+	integrity?: unknown;
 }
 
 export class WalkthroughStorage {
@@ -50,6 +52,7 @@ export class WalkthroughStorage {
 		title: string,
 		segments: Segment[],
 		name?: string,
+		integrity?: unknown,
 	): Promise<string> {
 		await fs.promises.mkdir(this.walkthroughsDir, { recursive: true });
 
@@ -57,6 +60,7 @@ export class WalkthroughStorage {
 		const filePath = path.join(this.walkthroughsDir, `${slug}.json`);
 
 		const data: WalkthroughFile = {
+			integrity,
 			title,
 			segments: this.toRelativePaths(segments),
 		};
@@ -81,7 +85,7 @@ export class WalkthroughStorage {
 	 * Load a walkthrough by name.
 	 * @returns The walkthrough with absolute file paths, or null if not found.
 	 */
-	async load(name: string): Promise<{ title: string; segments: Segment[] } | null> {
+	async load(name: string): Promise<{ title: string; segments: Segment[]; integrity?: unknown } | null> {
 		const slug = WalkthroughStorage.slugify(name);
 		const filePath = path.join(this.walkthroughsDir, `${slug}.json`);
 		try {
@@ -93,6 +97,7 @@ export class WalkthroughStorage {
 			return {
 				title: data.title,
 				segments: this.toAbsolutePaths(data.segments),
+				integrity: data.integrity,
 			};
 		} catch (err: unknown) {
 			if (err && typeof err === "object" && "code" in err && (err as NodeJS.ErrnoException).code === "ENOENT") {
@@ -103,29 +108,32 @@ export class WalkthroughStorage {
 	}
 
 	/** List all saved walkthroughs. */
-	async list(): Promise<Array<{ name: string; title: string; filePath: string }>> {
+	async list(): Promise<Array<{ name: string; title: string; filePath: string; mtime: number }>> {
 		try {
 			const entries = await fs.promises.readdir(this.walkthroughsDir);
 			const jsonFiles = entries.filter((e) => e.endsWith(".json"));
 
-			const results: Array<{ name: string; title: string; filePath: string }> = [];
+			const results: Array<{ name: string; title: string; filePath: string; mtime: number }> = [];
 
 			for (const file of jsonFiles) {
 				const filePath = path.join(this.walkthroughsDir, file);
 				try {
 					const raw = await fs.promises.readFile(filePath, "utf-8");
 					const data: WalkthroughFile = JSON.parse(raw);
+					const stat = await fs.promises.stat(filePath);
 					results.push({
 						name: path.basename(file, ".json"),
 						title: data.title,
 						filePath,
+						mtime: stat.mtimeMs,
 					});
 				} catch {
 					// Skip malformed files
 				}
 			}
 
-			return results;
+			// Most recent first — the sidebar shows the last few.
+			return results.sort((a, b) => b.mtime - a.mtime);
 		} catch {
 			return [];
 		}

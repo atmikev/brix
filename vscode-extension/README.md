@@ -1,4 +1,4 @@
-# Code Explainer
+# Brix
 
 **Interactive code walkthroughs with AI-powered voice narration and editor highlighting.**
 
@@ -25,7 +25,7 @@ How does the WebSocket gateway handle events?
 Or use the skill command:
 
 ```
-/explainer the matching engine
+/brix the matching engine
 ```
 
 ## How It Works
@@ -84,22 +84,22 @@ Uses [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) via [mlx-audio](htt
 - macOS (Apple Silicon recommended for GPU-accelerated TTS)
 - Python 3.10+
 - Node.js 18+
-- A coding agent (Claude Code, Codex, OpenCode, Kilo Code, Amp, etc.) with the Code Explainer skill installed
+- A coding agent (Claude Code, Codex, OpenCode, Kilo Code, Amp, etc.) with the Brix skill installed
 
 ## Installation
 
 Tell your coding agent:
 
 ```
-Install the code explainer skill from https://github.com/Royal-lobster/code-explainer
+Install the code brix skill from https://github.com/Royal-lobster/brix
 ```
 
 Or manually:
 
 ```bash
 mkdir -p ~/.claude/skills
-git clone https://github.com/Royal-lobster/code-explainer.git ~/.claude/skills/explainer
-~/.claude/skills/explainer/setup.sh
+git clone https://github.com/Royal-lobster/brix.git ~/.claude/skills/brix
+~/.claude/skills/brix/setup.sh
 ```
 
 ## Architecture

@@ -370,6 +370,12 @@ export interface WebviewOpenTheaterMessage {
 	type: "open_theater";
 }
 
+export interface WebviewAskNavigatorMessage {
+	type: "ask_navigator";
+	question: string;
+	segmentId: number;
+}
+
 export type FromWebviewMessage =
 	| WebviewDecisionAnswerMessage
 	| WebviewOpenHandoffMessage
@@ -378,6 +384,7 @@ export type FromWebviewMessage =
 	| WebviewClearFeedMessage
 	| WebviewOpenDecisionsPanelMessage
 	| WebviewOpenTheaterMessage
+	| WebviewAskNavigatorMessage
 	| WebviewPlayPauseMessage
 	| WebviewNextMessage
 	| WebviewPrevMessage

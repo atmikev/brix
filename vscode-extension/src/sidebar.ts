@@ -288,9 +288,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 				<div id="explanation-text" class="explanation-text"></div>
 			</div>
 
-			<div class="agent-hint">
-				<span class="agent-hint-icon">&#x1F4AC;</span>
-				Have questions? Ask your coding agent!
+			<div class="ask-row">
+				<input type="text" id="ask-input" placeholder="Ask about this code&hellip;">
+				<button id="ask-send" title="Ask">Ask</button>
 			</div>
 		</div>
 

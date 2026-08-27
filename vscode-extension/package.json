@@ -64,6 +64,14 @@
 			{
 				"command": "brix.openTheater",
 				"title": "Brix: Open Theater View"
+			},
+			{
+				"command": "brix.navigatorReviewDiff",
+				"title": "Brix: Navigator — Review Working Tree Diff"
+			},
+			{
+				"command": "brix.setNavigatorKey",
+				"title": "Brix: Set Navigator API Key"
 			}
 		],
 		"keybindings": [
@@ -125,6 +133,27 @@
 					"name": "Brix"
 				}
 			]
+		},
+		"configuration": {
+			"title": "Brix",
+			"properties": {
+				"brix.navigator.provider": {
+					"type": "string",
+					"enum": ["off", "anthropic", "openai"],
+					"default": "off",
+					"description": "LLM provider for the built-in navigator (pair-programming partner). 'openai' covers any OpenAI-compatible server: OpenAI, Ollama, LM Studio."
+				},
+				"brix.navigator.model": {
+					"type": "string",
+					"default": "claude-opus-5",
+					"description": "Model id, e.g. claude-opus-5 or qwen3:8b."
+				},
+				"brix.navigator.baseUrl": {
+					"type": "string",
+					"default": "",
+					"description": "Base URL for the openai provider, e.g. http://localhost:11434/v1. Ignored for anthropic."
+				}
+			}
 		}
 	},
 	"scripts": {

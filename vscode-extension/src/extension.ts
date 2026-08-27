@@ -9,6 +9,7 @@ import { WalkthroughStorage } from "./storage";
 import { highlightRange, highlightSegmentRange, highlightSubRange, clearHighlights, disposeHighlights, enableSmoothScrolling, restoreSmoothScrolling, setHighlightTarget } from "./highlight";
 import { streamTTS, isTTSAvailable, ensureServer, setWorkspaceRoot } from "./tts-bridge";
 import { openDecisionsPanel, updateDecisionsPanel } from "./decisions-panel";
+import { createNavigator } from "./navigator";
 import { TheaterView } from "./theater";
 import * as integrity from "./integrity";
 import type { PlanIntegrity, PlanValidity } from "./integrity";
@@ -786,8 +787,10 @@ export function activate(context: vscode.ExtensionContext): void {
 	);
 
 	// ── Agent messages → walkthrough state ──
+	// Extracted to a named function so the in-process navigator can dispatch the
+	// same messages the HTTP bus carries (inheriting auto-save, theater, integrity).
 
-	server.setMessageHandler((msg: AgentMessage) => {
+	const dispatch = (msg: AgentMessage): void => {
 		switch (msg.type) {
 			case "set_plan": {
 				walkthroughSaved = false;
@@ -890,7 +893,37 @@ export function activate(context: vscode.ExtensionContext): void {
 				break;
 			}
 		}
+	};
+	server.setMessageHandler(dispatch);
+
+	// ── Navigator: brix-hosted pair partner ──
+
+	const navigator = createNavigator(context, {
+		dispatch,
+		addFeedItem,
+		getWalkthrough: () => walkthrough.getState(),
+		captureIntegrity,
+		prewarmTTS: () => { ensureServer().catch(() => {}); },
+		wsFolder,
 	});
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand("brix.navigatorReviewDiff", () => navigator.reviewDiff()),
+		vscode.commands.registerCommand("brix.setNavigatorKey", async () => {
+			const value = await vscode.window.showInputBox({
+				password: true,
+				prompt: "Navigator API key (leave empty to clear)",
+			});
+			if (value === undefined) return;
+			if (value === "") {
+				await context.secrets.delete("brix.navigator.apiKey");
+				vscode.window.showInformationMessage("Brix: navigator API key cleared");
+			} else {
+				await context.secrets.store("brix.navigator.apiKey", value);
+				vscode.window.showInformationMessage("Brix: navigator API key saved");
+			}
+		}),
+	);
 
 	// ── Webview messages → walkthrough state + server ──
 
@@ -1040,6 +1073,20 @@ export function activate(context: vscode.ExtensionContext): void {
 				break;
 			case "decision_answer":
 				answerDecision(msg.id, msg.answer);
+				break;
+			case "ask_navigator":
+				if (navigator.isConfigured()) {
+					navigator.ask(msg.question, msg.segmentId);
+				} else {
+					// no navigator → route to the external driver agent's long-poll
+					server.queueAction({
+						type: "user_action",
+						action: "ask_question",
+						segmentId: msg.segmentId,
+						question: msg.question,
+					});
+					addFeedItem({ kind: "info", title: "Question sent to your coding agent", body: msg.question });
+				}
 				break;
 			case "open_handoff":
 				openHandoff(msg.path);

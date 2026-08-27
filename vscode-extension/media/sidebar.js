@@ -550,6 +550,16 @@ document.getElementById("btn-restart").addEventListener("click", () => {
 	vscode.postMessage({ type: "restart" });
 });
 
+const askInput = document.getElementById("ask-input");
+function sendAsk() {
+	const question = askInput.value.trim();
+	if (!question) return;
+	vscode.postMessage({ type: "ask_navigator", question, segmentId: state.currentSegment });
+	askInput.value = "";
+}
+askInput.addEventListener("keydown", (e) => { if (e.key === "Enter") sendAsk(); });
+document.getElementById("ask-send").addEventListener("click", sendAsk);
+
 document.getElementById("btn-theater").addEventListener("click", () => {
 	vscode.postMessage({ type: "open_theater" });
 });

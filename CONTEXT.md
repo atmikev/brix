@@ -96,6 +96,28 @@ These were learned the hard way — changing them tends to break something subtl
 - **Auto-hiding theater panels pauses playback first** — disposing the controls
   webview mid-narration would strand audio in a dead document.
 
+## Navigator
+
+The extension can host a second LLM — the **navigator**, a read-only
+pair-programming partner (reviews diffs adversarially, answers questions about
+the code on screen). The driver agent is unchanged; the navigator is
+brix-controlled end to end: it explores with read-only tools (`read_file`,
+`search`, `git_diff`) and must finish by calling a required `deliver` tool
+whose code-anchored utterances compile into existing surfaces — `say` →
+walkthrough segments (highlights + TTS), `finding` → feed, `question` →
+decision cards. Walls of text are impossible by construction: there is no
+free-text output channel.
+
+Provider-agnostic via two hand-rolled fetch adapters (`src/providers.ts`):
+Anthropic, and OpenAI-compatible (OpenAI, Ollama, LM Studio). Configure
+`brix.navigator.provider`/`model`/`baseUrl` in settings; API key via the
+"Brix: Set Navigator API Key" command (SecretStorage; Ollama/LM Studio need
+none). Triggers: the sidebar ask box (falls back to the external agent's
+`ask_question` long-poll action when the navigator is off) and "Brix:
+Navigator — Review Working Tree Diff". `scripts/mock-openai.js` is a canned
+provider for zero-cost end-to-end testing (`MOCK_BAD=1` exercises the
+degrade-to-feed path).
+
 ## Working on this
 
 ```bash
@@ -121,7 +143,8 @@ To exercise the bus without a full walkthrough:
 
 Working end to end: rebrand, both walkthrough modes, decisions + handoff docs,
 transcript feed with interval task watching, theater view with auto-hide,
-freshness detection. macOS/Apple Silicon only (TTS).
+freshness detection. macOS/Apple Silicon only (TTS). New and lightly tested:
+the navigator (mock-verified; needs real provider shakeout).
 
 Not built yet: voice input (design in `design/NOTES.md` — a local
 whisper daemon feeding the same wait-action bus, deliberately not MCP), and a

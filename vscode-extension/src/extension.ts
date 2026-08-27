@@ -16,7 +16,7 @@ import type { AgentMessage, FromWebviewMessage, Segment, Highlight, Decision, Fe
 
 // ── File-watcher fallback (backward compat) ──
 
-const HIGHLIGHT_FILE = path.join(os.homedir(), ".claude-highlight.json");
+const HIGHLIGHT_FILE = path.join(os.homedir(), ".claude-brix-highlight.json");
 
 interface HighlightRequest {
 	file: string;

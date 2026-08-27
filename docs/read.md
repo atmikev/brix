@@ -13,7 +13,7 @@ Sidebar active (from step 0):
 
 Fallback (no sidebar):
 ```bash
-echo '{"file":"{absolute_filepath}","start":{start},"end":{end}}' > ~/.claude-highlight.json
+echo '{"file":"{absolute_filepath}","start":{start},"end":{end}}' > ~/.claude-brix-highlight.json
 ```
 
 Always use absolute file paths.

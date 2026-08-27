@@ -18,7 +18,7 @@
 
 ---
 
-> **Brix** is a fork of [Code Explainer](https://github.com/Royal-lobster/code-explainer) by Srujan Gurram (MIT). It keeps the engine — extension server, synced highlights, local TTS — and extends it toward pair-programming review: alongside explaining existing code, Brix walks you through **changes** (diffs, branches, PRs) interleaved with the surrounding code they land in, ordered by importance instead of file order. See `docs/review.md` for the review mode and `design/` for where this is headed (decision queue, distilled transcript, voice-in).
+> **Brix** is a fork of [Code Explainer](https://github.com/Royal-lobster/code-explainer) by Srujan Gurram (MIT). It keeps the engine — extension server, synced highlights, local TTS — and extends it toward pair-programming review: alongside explaining existing code, Brix walks you through **changes** (diffs, branches, PRs) interleaved with the surrounding code they land in, ordered by importance instead of file order. See **[CONTEXT.md](CONTEXT.md)** for how the whole thing fits together — architecture, invariants, and status — plus `docs/review.md` for review mode and `design/` for the UX mockup and research.
 
 ---
 

@@ -92,6 +92,7 @@ These were learned the hard way — changing them tends to break something subtl
 - **Decisions and the feed are in-memory**, cleared on window reload. That's
   fine: handoff docs on disk are the durable record. Don't add persistence
   without a reason.
+- **Model tiers are set once in SKILL.md's table** and referenced by name everywhere. `SMALL`/haiku does explain-mode discovery only; anything that writes narration or judges code (segment agents, Overview, the review scout) is `MEDIUM` or better. The review scout is deliberately not `SMALL` — spotting the call site a change *forgot* is the whole point of review mode.
 - **Auto-hiding theater panels pauses playback first** — disposing the controls
   webview mid-narration would strand audio in a dead document.
 

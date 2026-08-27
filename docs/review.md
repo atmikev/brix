@@ -46,11 +46,11 @@ If checking out would clobber uncommitted work, stop and ask.
 
 ### Dispatch the review scout
 
-Dispatch a **`SMALL`** sub-agent. It maps the diff AND the feature code around it — no highlights, discovery only.
+Dispatch a **`MEDIUM`** sub-agent — not `SMALL`. This scout does the hardest reasoning in the pipeline: spotting call sites the change *didn't* update and judging whether it breaks surrounding conventions. Finding the diff is easy; noticing what's suspiciously absent is not. It maps the diff AND the feature code around it — no highlights, discovery only.
 
 Agent tool parameters:
 - `subagent_type`: `Explore`
-- `model`: `SMALL` ← replace with model from SKILL.md
+- `model`: `MEDIUM` ← replace with model from SKILL.md
 - `description`: `Scout changeset and surrounding code`
 
 #### Prompt template
@@ -96,7 +96,7 @@ Return a structured result:
 
 ## Step 2: Plan — chapter ordering rules
 
-These rules apply to whichever planning path runs (single `SMALL` agent for Quick review, `LARGE` planner + `MEDIUM` segment agents for Thorough — same dispatch mechanics as explain mode, see `docs/plan.md` and `docs/segments.md`).
+These rules apply to whichever planning path runs (single `MEDIUM` agent for Quick review, `LARGE` planner + `MEDIUM` segment agents for Thorough — same dispatch mechanics as explain mode, see `docs/plan.md` and `docs/segments.md`).
 
 1. **Open with a short orientation segment.** Segment 1 anchors on the heart of the change: what it does and the route ahead. **4 short sentences maximum** (~20 seconds spoken), 1-2 highlights, no detail yet. Cut anything that isn't the map.
 2. **Order by importance, not file order or diff order.** Heart first, then consequences, then tests, then glue. The user should be able to stop after chapter 3 and have understood the change.

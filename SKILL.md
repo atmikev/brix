@@ -17,8 +17,8 @@ Configure your preferred models here. All docs reference these tiers by name —
 | Tier | Default | Role |
 |------|---------|------|
 | `LARGE` | `opus` | Deep Dive planner — narrative reasoning, transition objects |
-| `MEDIUM` | `sonnet` | Deep Dive segment agents — deep code reading, dense highlights |
-| `SMALL` | `haiku` | Scout, Overview plan+highlights — fast exploration and scanning |
+| `MEDIUM` | `sonnet` | Segment agents, Overview plan+highlights, review scout — anything writing narration or judging code |
+| `SMALL` | `haiku` | Explain-mode scout — fast discovery and scanning, no judgment calls |
 
 When dispatching sub-agents, look up the model for the tier and use that exact model name.
 
@@ -30,9 +30,9 @@ Complete these steps in order:
    - **Sidebar check (Bash):** `PORT=$(cat ~/.claude-brix-port 2>/dev/null) && TOKEN=$(cat ~/.claude-brix-token 2>/dev/null) && curl -sf -H "Authorization: Bearer $TOKEN" "http://localhost:$PORT/api/health"` — `{"status":"ok"}` means sidebar is active. When active, **NEVER output walkthrough content as terminal text**; all output goes through sidebar HTTP API only.
    - **Ask preferences (AskUserQuestion):** Explain mode: read `docs/assess.md` and ask all three questions listed there in a single call. Review mode: read `docs/review.md` and ask its two questions instead.
 
-1. **Scout** — Explain mode: read `docs/scan.md` and dispatch a `SMALL` sub-agent to discover relevant files and map the call chain. Review mode: read `docs/review.md` — resolve the changeset first, then dispatch the review scout (it maps the diff AND the surrounding feature code). No highlights yet — discovery only.
+1. **Scout** — Explain mode: read `docs/scan.md` and dispatch a `SMALL` sub-agent to discover relevant files and map the call chain. Review mode: read `docs/review.md` — resolve the changeset first, then dispatch the review scout as a `MEDIUM` sub-agent (it maps the diff AND the surrounding feature code, and judges what the change missed). No highlights yet — discovery only.
 2. **Plan + generate** — Two paths depending on depth:
-   - **Overview / Quick review** — Single `SMALL` sub-agent reads scout output, builds plan, generates highlights in one pass. Its segment 1 must be a SHORT orientation segment (big picture + route ahead, 4 short sentences max, 1-2 highlights, no detail) — pass that requirement verbatim in the sub-agent prompt. Review mode: also follow the chapter-ordering rules in `docs/review.md`. Send `set_plan` when done.
+   - **Overview / Quick review** — Single `MEDIUM` sub-agent reads scout output, builds plan, generates highlights in one pass. Its segment 1 must be a SHORT orientation segment (big picture + route ahead, 4 short sentences max, 1-2 highlights, no detail) — pass that requirement verbatim in the sub-agent prompt. Review mode: also follow the chapter-ordering rules in `docs/review.md`. Send `set_plan` when done.
    - **Deep Dive / Thorough review** — Read `docs/plan.md` (and `docs/review.md` for review-mode ordering rules). Dispatch `LARGE` planner to build narrative + transition objects. Then read `docs/segments.md` and dispatch parallel `MEDIUM` segment agents (all at once). Create a unique temp dir with `mktemp -d` and have each agent write its segment there. Wait for ALL agents to complete, then assemble from files with `jq` and send one full `set_plan`. Clean up the temp dir after sending. Do NOT send anything to the sidebar until everything is ready.
 3. **Execute walkthrough** — Read the doc for chosen mode: `docs/walkthrough.md`, `docs/read.md`, or `docs/podcast.md`. Walkthrough and podcast reference `docs/tts.md`.
 4. **Wrap up** — Explain mode: 3-5 key takeaways, how the feature fits the broader architecture, offer to dive deeper or explain related features. Review mode: the fit-check verdict from `docs/review.md` (does the change fit the surrounding code? missed call sites? convention drift?), then any decisions the user still owes.
@@ -80,7 +80,8 @@ If `state` returns `status: "idle"` (no active walkthrough), check `.walkthrough
 | Skipping `set_plan` before `goto` | Sidebar needs the full plan loaded first. Always send `set_plan` via `brix.sh plan` before any `goto` messages |
 | Sending plan before agents finish | Wait for ALL parallel segment agents to complete. Each writes to a unique temp dir (created via `mktemp -d`). Assemble from files with `jq`, then send one `set_plan`. Clean up temp dir after. Never send stubs or partial plans |
 | Scout generating highlights | Scout only maps files and call chain. Highlights are generated in step 2 (Overview: single agent, Deep Dive: parallel agents) |
-| Running planner + parallel agents for Overview | Overview uses one fast `SMALL` agent for plan + highlights. Planner and segment agents are Deep Dive only |
+| Running planner + parallel agents for Overview | Overview uses one `MEDIUM` agent for plan + highlights. Planner and segment agents are Deep Dive only |
+| Review scout on `SMALL` | The review scout hunts untouched call sites and convention breaks — the pipeline's hardest judgment. It is `MEDIUM`, unlike the explain-mode scout |
 | Using tier names as literal model names | `LARGE`, `MEDIUM`, `SMALL` are placeholders — always resolve to the actual model name from the Models table in SKILL.md before dispatching |
 | Diving into details cold | Segment 1 of EVERY walkthrough (both modes, both depths) is an orientation segment: the big picture and the route ahead. Hard cap: **4 short sentences**, 1-2 highlights, no line-by-line yet. See `docs/plan.md` / `docs/review.md` |
 | Orientation that rambles | 4 short sentences is a ceiling, not a target. No history, no caveats, no feature tour — just what it is and where we're going |

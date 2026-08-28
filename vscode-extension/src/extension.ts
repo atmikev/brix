@@ -278,7 +278,13 @@ export function activate(context: vscode.ExtensionContext): void {
 	// so losing the card list on reload costs nothing durable.
 	const decisions: Decision[] = [];
 	server.setDecisionsProvider(() => decisions);
-	server.setValidityProvider(() => planValidity ?? { overall: "unknown" });
+	// Freshness is computed on demand (when the agent calls `validate`), never
+	// automatically on every edit — auto-recalc fired repeatedly during plan
+	// execution and fought the agent's own in-flight writes.
+	server.setValidityProvider(async () => {
+		await revalidate();
+		return planValidity ?? { overall: "unknown" };
+	});
 
 	/**
 	 * Audio must play in the same webview the user clicked — an AudioContext
@@ -1181,19 +1187,10 @@ export function activate(context: vscode.ExtensionContext): void {
 	sidebar.setMessageHandler(handleWebviewMessage);
 	theater.setMessageHandler((msg) => { handleWebviewMessage(msg); });
 
-	// A walkthrough goes stale the moment its files change underneath it.
-	let revalidateTimer: ReturnType<typeof setTimeout> | undefined;
-	function scheduleRevalidate(changed: string): void {
-		if (!planIntegrity) return;
-		const files = new Set(walkthrough.getState().segments.map((seg) => seg.file));
-		if (!files.has(changed)) return;
-		if (revalidateTimer) clearTimeout(revalidateTimer);
-		revalidateTimer = setTimeout(() => { revalidate().catch(() => {}); }, 400);
-	}
-	context.subscriptions.push(
-		vscode.workspace.onDidSaveTextDocument((doc) => scheduleRevalidate(doc.uri.fsPath)),
-		vscode.workspace.onDidChangeTextDocument((e) => scheduleRevalidate(e.document.uri.fsPath)),
-	);
+	// A walkthrough goes stale when its files change underneath it, but we no
+	// longer recompute automatically on every edit — that fired repeatedly while
+	// a plan was being executed. Freshness is now pull-based: the agent calls
+	// `brix.sh validate`, which recomputes via the validity provider above.
 
 	// Keep theater panels in step with the active tab
 	context.subscriptions.push(

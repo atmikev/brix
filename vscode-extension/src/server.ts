@@ -162,8 +162,12 @@ export class BrixServer {
 		} else if (req.method === "GET" && url.pathname === "/api/state") {
 			this.handleGetState(res);
 		} else if (req.method === "GET" && url.pathname === "/api/validity") {
-			res.writeHead(200);
-			res.end(JSON.stringify(this.validityProvider?.() ?? { overall: "unknown" }));
+			// Provider may recompute on demand (async) — freshness is pull-based.
+			Promise.resolve(this.validityProvider?.() ?? { overall: "unknown" }).then((v) => {
+				if (res.writableEnded) return;
+				res.writeHead(200);
+				res.end(JSON.stringify(v ?? { overall: "unknown" }));
+			});
 		} else if (req.method === "GET" && url.pathname === "/api/decisions") {
 			res.writeHead(200);
 			res.end(JSON.stringify({ decisions: this.decisionsProvider?.() ?? [] }));
@@ -425,7 +429,7 @@ export class BrixServer {
 
 	private onAgentMessage?: (msg: AgentMessage) => void;
 	private decisionsProvider?: () => unknown[];
-	private validityProvider?: () => unknown;
+	private validityProvider?: () => unknown | Promise<unknown>;
 
 	setMessageHandler(handler: (msg: AgentMessage) => void): void {
 		this.onAgentMessage = handler;
@@ -437,7 +441,7 @@ export class BrixServer {
 	}
 
 	/** Register a callback returning walkthrough freshness for GET /api/validity */
-	setValidityProvider(provider: () => unknown): void {
+	setValidityProvider(provider: () => unknown | Promise<unknown>): void {
 		this.validityProvider = provider;
 	}
 

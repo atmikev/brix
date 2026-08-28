@@ -20,7 +20,7 @@
 
 > **Why this exists.** Agents generate more code than a human can review. Summaries arrive as walls of text, decisions get buried in terminal scrollback, and the result is rubber-stamp approvals. Brix attacks that with paced, importance-ordered walkthroughs that point at real code instead of describing it, a decision queue backed by handoff docs, and a distilled feed of what actually matters.
 >
-> Brix is a fork of [Code Explainer](https://github.com/Royal-lobster/code-explainer) by Srujan Gurram (MIT). It keeps the engine — extension server, synced highlights, local Kokoro TTS, sidebar playback — and adds review mode, the navigator, the decision queue, the transcript feed, theater view, freshness detection, and voice/text questions. See **[CONTEXT.md](CONTEXT.md)** for the architecture, invariants, and status.
+> See **[CONTEXT.md](CONTEXT.md)** for the architecture, invariants, and status, and **[third-party-libraries.md](third-party-libraries.md)** for attributions.
 
 ---
 
@@ -177,4 +177,4 @@ The extension runs a token-authed HTTP + WebSocket server on localhost. The agen
 
 ## 📄 License
 
-MIT — see [LICENSE](LICENSE). Forked from [Code Explainer](https://github.com/Royal-lobster/code-explainer) (Srujan Gurram, MIT).
+MIT — see [LICENSE](LICENSE). Third-party components and attributions are listed in [third-party-libraries.md](third-party-libraries.md).

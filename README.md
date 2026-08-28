@@ -5,11 +5,11 @@
 <h1 align="center">Brix</h1>
 
 <p align="center">
-  <strong>✨ Interactive code walkthroughs with editor highlighting and AI-powered voice narration.</strong>
+  <strong>Voice-narrated, editor-driven code walkthroughs — with a pair-programming partner built in.</strong>
 </p>
 
 <p align="center">
-  A coding agent skill that scans your codebase, builds a walkthrough plan, and explains code segment-by-segment — highlighting lines in VS Code / Cursor with a dedicated sidebar panel and narrating with natural-sounding local TTS. Works with Claude Code, Codex, OpenCode, Kilo Code, Amp, and more.
+  A coding agent builds a plan; the VS Code extension opens the files, highlights the lines being discussed, and narrates them aloud while you follow along. Brix <strong>explains</strong> existing code and <strong>reviews</strong> a change (diff, branch, PR) in the context of the code it lands in — and hosts a second, read-only <strong>navigator</strong> LLM that reviews your diffs and answers questions about the step you're on, by voice or text.
 </p>
 
 <p align="center">
@@ -18,91 +18,60 @@
 
 ---
 
-> **Brix** is a fork of [Code Explainer](https://github.com/Royal-lobster/code-explainer) by Srujan Gurram (MIT). It keeps the engine — extension server, synced highlights, local TTS — and extends it toward pair-programming review: alongside explaining existing code, Brix walks you through **changes** (diffs, branches, PRs) interleaved with the surrounding code they land in, ordered by importance instead of file order. See **[CONTEXT.md](CONTEXT.md)** for how the whole thing fits together — architecture, invariants, and status — plus `docs/review.md` for review mode and `design/` for the UX mockup and research.
+> **Why this exists.** Agents generate more code than a human can review. Summaries arrive as walls of text, decisions get buried in terminal scrollback, and the result is rubber-stamp approvals. Brix attacks that with paced, importance-ordered walkthroughs that point at real code instead of describing it, a decision queue backed by handoff docs, and a distilled feed of what actually matters.
+>
+> Brix is a fork of [Code Explainer](https://github.com/Royal-lobster/code-explainer) by Srujan Gurram (MIT). It keeps the engine — extension server, synced highlights, local Kokoro TTS, sidebar playback — and adds review mode, the navigator, the decision queue, the transcript feed, theater view, freshness detection, and voice/text questions. See **[CONTEXT.md](CONTEXT.md)** for the architecture, invariants, and status.
 
 ---
 
-## 🚀 Features
+## ✨ What's inside
 
-- 🪟 **VS Code Sidebar** — Dedicated sidebar panel with walkthrough controls, segment navigation, and live explanation display
-- 🎯 **Code Highlighting** — Automatically opens files, scrolls to code, and highlights 1–8 line ranges with per-highlight explanations
-- 🔊 **Local TTS** — Natural-sounding voice narration powered by Kokoro-82M (#1 ranked open-source TTS), running locally on Apple Silicon via mlx-audio
-- 🎬 **Three Modes** — Walkthrough (hands-free with TTS), Read (text in terminal), or Podcast (single audio file)
-- 🧠 **Adaptive Depth** — Overview or Deep Dive explanations based on your familiarity
-- 📋 **Plan-First** — Scout finds files, planner builds narrative order, parallel segment agents generate highlights — outline visible immediately, segments stream in as they finish
-- 💾 **Save & Share** — Save walkthroughs to `.walkthrough.json` files, replay later or share with teammates via the repo
-- ⌨️ **Keyboard Shortcuts** — Full keybinding support for hands-free navigation
+- 🎥 **Walkthroughs** — importance-ordered chapters with synced editor highlights and voice narration, paced so you can actually read the code.
+- 🔍 **Two modes, one engine** — **explain** existing code, or **review** a change. Review interleaves chapters of the surrounding feature ("here's how this works today") with chapters of the change ("here's what it does to it"), because a diff can't be judged without the code it lands in.
+- 🧭 **The navigator** — a brix-hosted, **read-only** pair-programming partner (any LLM) that reviews your working-tree diff adversarially and answers questions about the step you're viewing. It can't dump walls of text: its output is always code-anchored and rendered through the walkthrough, feed, and decision surfaces.
+- 🎙️ **Vocal & text questions** — ask about the current step from the sidebar box or by voice (`scripts/voice.py`), transcribed **locally** with mlx-whisper — no key, nothing leaves your machine.
+- 📋 **Decision queue** — everything the agent is blocked on in one place, backed by handoff docs on disk.
+- 📰 **Distilled transcript** — findings, answers, and status in a feed; process narration ("edited 3 files") stays in the terminal.
+- 🎬 **Theater view** — a real VS Code editor grid (not a rendered pane) with the code centre-stage, outline right, controls bottom.
+- 🩺 **Freshness detection** — plans pin `file:line`, so they rot; brix snapshots content hashes and relocates pure line shifts automatically, flagging real edits as stale.
+- 🔊 **Local TTS** — natural narration via Kokoro-82M through mlx-audio on Apple Silicon. Fully offline.
 
 ## 📦 Requirements
 
-- 🍎 macOS (Apple Silicon recommended for GPU-accelerated TTS)
+- 🍎 macOS, Apple Silicon (for GPU-accelerated local TTS/STT)
 - 🐍 Python 3.10+
 - 📗 Node.js 18+
-- 🖥️ VS Code or Cursor with CLI enabled (`code` or `cursor` command)
+- 🖥️ VS Code or Cursor with the CLI enabled (`code` or `cursor` command)
 
 ## 🔧 Installation
 
-Just tell your coding agent:
+Tell your coding agent:
 
 ```
-Install the code brix skill from https://github.com/Royal-lobster/brix
+Install the brix skill from https://github.com/atmikev/brix
 ```
 
-Your agent will clone the repo into the skills directory, run `setup.sh`, and ask you to reload your editor — all while keeping you in the loop at each step.
+It clones the repo into your skills directory, runs `setup.sh`, and asks you to reload your editor.
 
 <details>
 <summary>📋 Manual installation</summary>
 
-### Skill-native agents
+Clone into your agent's skills directory, then run setup:
 
-These agents support the `skills/<name>/SKILL.md` format natively. Clone directly into the skills directory:
-
-| Agent | Install commands |
-|-------|-----------------|
-| **Claude Code** | `git clone https://github.com/Royal-lobster/brix.git ~/.claude/skills/brix` |
-| **Amp** | `git clone https://github.com/Royal-lobster/brix.git ~/.config/agents/skills/brix` |
-| **OpenCode** | `git clone https://github.com/Royal-lobster/brix.git ~/.config/opencode/skills/brix` |
-| **Codex CLI** | `git clone https://github.com/Royal-lobster/brix.git ~/.codex/skills/brix` |
-
-Then run setup:
+| Agent | Clone into |
+|-------|-----------|
+| **Claude Code** | `~/.claude/skills/brix` |
+| **Amp** | `~/.config/agents/skills/brix` |
+| **OpenCode** | `~/.config/opencode/skills/brix` |
+| **Codex CLI** | `~/.codex/skills/brix` |
 
 ```bash
+git clone https://github.com/atmikev/brix.git <SKILLS_DIR>/brix
 <SKILLS_DIR>/brix/setup.sh
 # Reload your editor: Cmd+Shift+P → "Developer: Reload Window"
 ```
 
-### Rule-based agents
-
-These agents use their own rules/instructions format. Clone to any location, run setup, then point your agent's rules at the `SKILL.md`:
-
-```bash
-# 1. Clone to a shared location
-git clone https://github.com/Royal-lobster/brix.git ~/brix
-
-# 2. Run setup
-~/brix/setup.sh
-
-# 3. Reload your editor: Cmd+Shift+P → "Developer: Reload Window"
-```
-
-Then add a rule or instruction pointing to the skill:
-
-| Agent | How to add |
-|-------|------------|
-| **Cursor** | Add a `.cursor/rules/brix.mdc` file in your project that includes the contents of `SKILL.md` |
-| **Windsurf** | Append the contents of `SKILL.md` to `~/.codeium/windsurf/memories/global_rules.md` |
-| **Kilo Code** | Copy `SKILL.md` to `~/.kilocode/rules/brix.md` |
-| **Roo Code** | Copy `SKILL.md` to `~/.roo/rules/brix.md` |
-| **Cline** | Copy `SKILL.md` to your `.clinerules/brix.md` directory |
-
-> **Note:** The `SKILL.md` references relative paths (e.g., `docs/assess.md`), so the full repo must exist at the cloned location. For rule-based agents, ensure paths in the copied rules resolve correctly or use absolute paths.
-
-### What setup.sh does
-
-- 🐍 Python venv creation with TTS engine (mlx-audio + sounddevice)
-- 🧩 VS Code extension build and installation (.vsix for VS Code + Cursor)
-- 🗣️ Voice model download (~330 MB)
-- 🔑 Script permissions
+`setup.sh` creates a Python venv with the TTS + voice engines (mlx-audio, mlx-whisper, `misaki[en]`, sounddevice), builds and installs the VS Code extension, downloads the voice model, and sets script permissions. Rule-based agents (Cursor, Windsurf, Kilo, Roo, Cline) can point their rules file at the cloned `SKILL.md`.
 
 </details>
 
@@ -111,201 +80,101 @@ Then add a rule or instruction pointing to the skill:
 In your coding agent:
 
 ```
-/brix the authentication system
+/brix the authentication system          # explain existing code
+/brix review my changes                  # review the working-tree diff
 ```
 
-Or naturally:
+Or naturally — "walk me through the order flow", "what did you just change?", "review this branch". Brix picks explain vs. review from the subject, asks your depth (Overview / Deep Dive) and delivery (Walkthrough / Read / Podcast), then builds the plan and starts playback.
 
+## 🧭 The navigator
+
+The navigator is a second LLM the extension calls **directly** — provider-agnostic, and **read-only** (it can read files, search, and diff; it cannot edit or run commands). It reviews your changes adversarially and answers questions about the code on screen. Because brix composes its whole prompt and requires structured, code-anchored output, it renders through the same walkthrough / feed / decision surfaces — no walls of text.
+
+Configure it in VS Code settings (machine-scoped, so a workspace can't repoint it):
+
+| Setting | Values |
+|---------|--------|
+| `brix.navigator.provider` | `off` (default) · `anthropic` · `openai` |
+| `brix.navigator.model` | e.g. `claude-opus-5`, `qwen3:8b` |
+| `brix.navigator.baseUrl` | for `openai`, e.g. `http://localhost:11434/v1` (Ollama / LM Studio) |
+
+`openai` covers any OpenAI-compatible server, so **Ollama and LM Studio run keyless and local**. For a cloud provider, set the key with **Brix: Set Navigator API Key** (stored in SecretStorage).
+
+- **Review** — run **Brix: Navigator — Review Working Tree Diff** from the command palette.
+- **Ask** — with a walkthrough open, type in the sidebar ask box, or speak (below). Questions are grounded at the step you're viewing. If the navigator is `off`, questions fall back to your driver agent.
+
+## 🎙️ Questions at a step (voice & text)
+
+Both routes funnel through one primitive — `brix.sh ask <question>` — which posts the question to the current segment.
+
+```bash
+# Voice: push-to-talk, transcribed locally with mlx-whisper (no key, offline)
+python3 scripts/voice.py          # Enter to record, Enter to stop
+
+# Any source can drive the same path
+./scripts/brix.sh ask "why is this guarded here?"
 ```
-Explain how the matching engine works
-Walk me through the order flow
-How does the WebSocket gateway handle events?
-```
 
-## ⚙️ How It Works
+`voice.py` captures the mic with ffmpeg and transcribes with mlx-whisper (the same MLX stack as the TTS). Set `GROQ_API_KEY` / `OPENAI_API_KEY` only if you'd rather use a cloud Whisper API as a fallback.
 
-```
-1. 💬 You ask to explain a feature
-2. 🎯 Asks your depth preference (Overview / Deep Dive) and delivery mode
-3. 🔍 Scout sub-agent maps the codebase — discovers relevant files and call chain
-
-Overview path (fast):
-4. 📋 Single agent builds plan + highlights in one pass → sends set_plan
-
-Deep Dive path (thorough):
-4. 🗺️ Planner builds narrative order + transition objects
-5. ⚡ Parallel segment agents generate dense highlights
-   Waits for all agents to finish, then sends full set_plan to sidebar
-
-6. ✅ Plan in sidebar + chat — approve, reorder, or skip before playback starts
-7. 🔄 Walkthrough runs based on your chosen mode:
-   Walkthrough — sidebar drives playback automatically with TTS narration
-   Read        — step through explanations in terminal, highlights code as you go
-   Podcast     — renders a single audio file of the entire walkthrough
-8. 📝 Summarizes key takeaways
-```
-
-## 🎬 Modes
+## 🎬 Modes & controls
 
 | Mode | Description |
 |------|-------------|
-| 🎥 **Walkthrough** | Highlights move through code automatically while voice narrates in sync. Hands-free — just watch and listen. |
-| 📝 **Read** | Text explanations in terminal. Highlights code, explains in text, waits for "next". No sidebar or TTS required. |
-| 🎙️ **Podcast** | Generates a single audio file of the entire walkthrough. Listen anywhere. |
+| 🎥 **Walkthrough** | Highlights move through code while voice narrates in sync. Hands-free. |
+| 📝 **Read** | Text explanations in the terminal, highlighting code as you go. No TTS. |
+| 🎙️ **Podcast** | Renders a single audio file of the whole walkthrough. |
 
-### 🪟 Sidebar Controls
+The sidebar has play/pause, next/prev highlight and segment, speed, volume, voice, mute, restart, save, and close. Keyboard shortcuts are active during a walkthrough:
 
-The VS Code sidebar provides buttons for all walkthrough controls:
+| Shortcut | Action | | Shortcut | Action |
+|----------|--------|---|----------|--------|
+| `Ctrl+Shift+Space` | Play / pause | | `Ctrl+Shift+Alt+]` / `[` | Next / prev segment |
+| `Ctrl+Shift+]` / `[` | Next / prev highlight | | `Ctrl+Shift+=` / `-` | Speed up / down |
+| `Ctrl+Shift+\` | Stop | | | |
 
-- ▶️ **Play / Pause** — Toggle walkthrough playback
-- ⏭️ **Next / Previous** — Navigate between highlights within a segment
-- ⏩ **Next / Previous Segment** — Jump between segments
-- ⏩ **Speed** — Adjust TTS playback speed
-- 🔈 **Volume** — Adjust TTS volume
-- 🗣️ **Voice** — Select TTS voice
-- 🔇 **Mute / Unmute** — Toggle voice narration
-- 🔄 **Restart** — Restart walkthrough from the beginning
-- 💾 **Save** — Save current walkthrough to `.walkthroughs/` for later replay
-- ✕ **Close** — Close walkthrough (prompts to save if unsaved)
-
-### 💾 Save & Share
-
-Save walkthroughs as portable JSON files that live in your repo:
+### 💾 Save & share
 
 ```bash
-# Save via CLI
-./scripts/brix.sh save auth-flow
-
-# Load a saved walkthrough
-./scripts/brix.sh load auth-flow
-
-# List all saved walkthroughs
-./scripts/brix.sh list
+./scripts/brix.sh save auth-flow     # save the loaded walkthrough
+./scripts/brix.sh load auth-flow     # replay it later
+./scripts/brix.sh list               # list saved walkthroughs
 ```
 
-Or use the VS Code command palette:
-- **Brix: Save Walkthrough** — Save with a custom name
-- **Brix: Load Walkthrough** — Browse and load saved walkthroughs
+Saved walkthroughs live in `.walkthroughs/` with relative paths, so teammates can pull and replay them.
 
-Saved walkthroughs are stored in `.walkthroughs/` at the workspace root with relative file paths, so teammates can pull them and replay on their own machine. The sidebar also shows a browse list of saved walkthroughs when no walkthrough is active.
+## 🗣️ Voice configuration
 
-### ⌨️ Keyboard Shortcuts
-
-All shortcuts are active when a walkthrough is running:
-
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+Shift+Space` | Toggle play / pause |
-| `Ctrl+Shift+]` | Next sub-segment |
-| `Ctrl+Shift+[` | Previous sub-segment |
-| `Ctrl+Shift+Alt+]` | Next segment |
-| `Ctrl+Shift+Alt+[` | Previous segment |
-| `Ctrl+Shift+\` | Stop walkthrough |
-| `Ctrl+Shift+=` | Speed up TTS |
-| `Ctrl+Shift+-` | Speed down TTS |
-
-### 💬 Text Controls
-
-You can also type commands in your agent's chat:
-
-| Command | Action |
-|---------|--------|
-| `next` | ⏭️ Move to next segment |
-| `skip` | ⏩ Skip current segment |
-| `skip to 4` | 🎯 Jump to segment 4 |
-| `pause` | ⏸️ Pause walkthrough |
-| `mute` / `unmute` | 🔇 Toggle voice narration |
-| `stop` | ⏹️ End walkthrough |
-
-## 🗣️ Voice Configuration
-
-Brix uses [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) via [mlx-audio](https://github.com/Blaizzy/mlx-audio) for high-quality local TTS. Falls back to macOS `say` if unavailable.
+Narration uses [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) via [mlx-audio](https://github.com/Blaizzy/mlx-audio); falls back to macOS `say`.
 
 ```bash
-# Change voice
-export TTS_VOICE=am_adam    # American male
-
-# Change speed
-export TTS_SPEED=1.2        # 20% faster
+export TTS_VOICE=am_adam   # af_heart (default), af_bella, af_sarah, am_adam, am_michael, bf_emma, bm_george
+export TTS_SPEED=1.2       # 20% faster
 ```
-
-### 🎤 Available Voices
-
-| Voice | Description |
-|-------|-------------|
-| `af_heart` | 🇺🇸 American English, female (default) |
-| `af_bella` | 🇺🇸 American English, female |
-| `af_sarah` | 🇺🇸 American English, female |
-| `am_adam` | 🇺🇸 American English, male |
-| `am_michael` | 🇺🇸 American English, male |
-| `bf_emma` | 🇬🇧 British English, female |
-| `bm_george` | 🇬🇧 British English, male |
 
 ## 🏗️ Architecture
 
-The extension runs an HTTP + WebSocket server on localhost for communication between your coding agent and the VS Code sidebar.
-
 ```
-Coding Agent ──HTTP──▶ Extension Server ──Events──▶ Sidebar Webview
-                           │                            │
-                      Highlight API              TTS Audio Stream
-                           │                            │
-                     VS Code Editor              Browser AudioContext
+coding agent (skill: markdown + Bash + curl, no MCP)
+      │  scripts/brix.sh  →  HTTP + bearer token
+      ▼
+VS Code extension  ── webview messages ─→  sidebar · theater panels
+   │      │                                     │
+   │      └── navigator (read-only LLM) ─────────┘   (reviews, answers)
+   └──────── wait-action long-poll ◄───────────────  (answers, decisions, status)
 ```
 
-### 🧩 Key Components
+The extension runs a token-authed HTTP + WebSocket server on localhost. The agent pushes plans, decisions, and feed updates; it pulls user actions from one long-poll. No MCP anywhere — the skill is markdown + shell + curl, so it works in MCP-restricted environments and with any agent that can run shell commands.
 
-| Component | Description |
-|-----------|-------------|
-| 🌐 **Extension Server** (`server.ts`) | HTTP + WebSocket server with bearer token auth. Endpoints for plan delivery, state queries, save/load, and long-polling user actions. |
-| 🪟 **Sidebar** (`sidebar.ts`) | Webview panel showing the walkthrough — segment list, per-highlight explanations, and playback controls. |
-| 🔄 **Walkthrough** (`walkthrough.ts`) | State machine managing segment and sub-highlight navigation and playback status. |
-| 🎯 **Highlight** (`highlight.ts`) | Opens files, scrolls to ranges, and applies gold background decorations. |
-| 🔊 **TTS Bridge** (`tts-bridge.ts`) | Streams audio from the Python TTS server to the sidebar webview via WebSocket. |
-| 🐍 **TTS Server** (`tts_server.py`) | Persistent Python daemon that loads Kokoro once and streams audio over a Unix socket. |
-| 💾 **Storage** (`storage.ts`) | Save and load walkthroughs as `.walkthrough.json` files for replay and sharing. |
-| 📡 **Helper Script** (`brix.sh`) | CLI wrapper around the HTTP API — used by the coding agent to send plans and poll for user actions. |
-
-## 📁 Project Structure
-
-```
-brix/
-├── 📄 SKILL.md                      # AI agent skill instructions
-├── 🔧 setup.sh                      # One-command setup script
-├── 📂 scripts/
-│   ├── 📡 brix.sh              # HTTP API helper for the coding agent
-│   ├── 🐍 tts_server.py             # Persistent TTS server (Kokoro-82M)
-│   ├── 🎙️ podcast.py                # Podcast mode audio generator
-│   └── 🔄 reinstall-extension.sh    # Quick extension rebuild
-├── 📂 docs/
-│   ├── 📖 setup.md                  # Setup reference
-│   ├── 🗑️ uninstall.md              # Uninstall guide
-│   ├── 🎯 assess.md                 # Preference gathering (depth + delivery mode)
-│   ├── 🔍 scan.md                   # Scout sub-agent (file discovery + call chain)
-│   ├── 📋 plan.md                   # Planner sub-agent (narrative + transition objects)
-│   ├── ⚡ segments.md               # Parallel segment agents (highlight generation)
-│   ├── 🎥 walkthrough.md            # Walkthrough mode (sidebar + TTS)
-│   ├── 📝 read.md                   # Read mode (text in terminal)
-│   ├── 🎙️ podcast.md               # Podcast mode (single audio file)
-│   └── 🗣️ tts.md                   # TTS reference (voices, speeds)
-└── 📂 vscode-extension/
-    ├── 📦 package.json
-    ├── ⚙️ tsconfig.json
-    ├── 📂 src/
-    │   ├── 🚀 extension.ts          # Main entry point
-    │   ├── 🌐 server.ts             # HTTP + WebSocket server
-    │   ├── 🪟 sidebar.ts            # Webview sidebar provider
-    │   ├── 🔄 walkthrough.ts        # Walkthrough state machine
-    │   ├── 🎯 highlight.ts          # Code highlighting
-    │   ├── 🔊 tts-bridge.ts         # TTS audio streaming
-    │   ├── 💾 storage.ts            # Walkthrough persistence
-    │   └── 📝 types.ts              # Message protocol types
-    └── 📂 media/
-        ├── 🎨 icon.svg
-        ├── 🖼️ icon.png
-        └── 📜 sidebar.js            # Sidebar webview script
-```
+| Component | What |
+|-----------|------|
+| `server.ts` | HTTP + WS server, bearer-token auth, message validation |
+| `navigator.ts` · `providers.ts` | The brix-hosted navigator + Anthropic / OpenAI-compatible adapters |
+| `walkthrough.ts` · `highlight.ts` · `theater.ts` | Plan state, editor decorations, theater grid |
+| `integrity.ts` | Freshness snapshots and relocation |
+| `tts-bridge.ts` · `scripts/tts_server.py` | Kokoro TTS daemon over a Unix socket |
+| `scripts/brix.sh` · `scripts/voice.py` | The agent's HTTP helper + local voice input |
 
 ## 📄 License
 
-MIT
+MIT — see [LICENSE](LICENSE). Forked from [Code Explainer](https://github.com/Royal-lobster/code-explainer) (Srujan Gurram, MIT).

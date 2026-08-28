@@ -26,6 +26,7 @@ const VALID_AGENT_MESSAGE_TYPES = new Set([
 	"post_update",
 	"watch_task",
 	"end_task",
+	"ask",
 ]);
 
 const VALID_FEED_KINDS = new Set(["finding", "answer", "status", "progress", "info"]);
@@ -420,6 +421,8 @@ export class BrixServer {
 				return typeof m.id === "string" && typeof m.title === "string";
 			case "end_task":
 				return typeof m.id === "string";
+			case "ask":
+				return typeof m.question === "string";
 			default:
 				return false;
 		}

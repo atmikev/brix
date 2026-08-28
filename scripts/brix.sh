@@ -17,6 +17,7 @@
 #                                 {"kind":"finding|answer|status|progress|info","title":...,"body":...,"source":...}
 #   brix.sh watch-task <id> <title> [interval_sec]  Start interval status requests for a long task
 #   brix.sh end-task <id> [summary]                 Stop watching; post completion to feed
+#   brix.sh ask <question>        Ask a question about the current walkthrough step
 
 PORT_FILE="$HOME/.claude-brix-port"
 TOKEN_FILE="$HOME/.claude-brix-token"
@@ -139,6 +140,17 @@ case "$1" in
             -H "$AUTH_HEADER" \
             -d "$PAYLOAD"
         ;;
+    ask)
+        if [ -z "$2" ]; then
+            echo "Usage: brix.sh ask <question>" >&2
+            exit 1
+        fi
+        PAYLOAD=$(python3 -c 'import json,sys; print(json.dumps({"type":"ask","question":sys.argv[1]}))' "$2")
+        curl -s -X POST "$BASE/api/message" \
+            -H 'Content-Type: application/json' \
+            -H "$AUTH_HEADER" \
+            -d "$PAYLOAD"
+        ;;
     post)
         if [ -z "$2" ]; then
             echo "Usage: brix.sh post '<feed_item_json>' (or @path/to/file.json)" >&2
@@ -185,7 +197,7 @@ print(json.dumps(d))' "$2" "$3" ${4:+"$4"})
             -d "$PAYLOAD"
         ;;
     *)
-        echo "Usage: brix.sh {plan|send|state|wait-action|stop|save|load|list|decision|decisions|resolve-decision|post|watch-task|end-task}" >&2
+        echo "Usage: brix.sh {plan|send|state|wait-action|stop|save|load|list|decision|decisions|resolve-decision|post|watch-task|end-task|ask}" >&2
         exit 1
         ;;
 esac

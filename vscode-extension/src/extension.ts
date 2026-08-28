@@ -945,6 +945,19 @@ export function activate(context: vscode.ExtensionContext): void {
 				});
 				break;
 			}
+			case "ask": {
+				// A question about the current step from any source (voice daemon,
+				// script). Route to the navigator, or to the driver agent if it's off.
+				const seg = walkthrough.getCurrentSegment();
+				const segmentId = seg ? seg.id : -1;
+				if (navigator.isConfigured()) {
+					navigator.ask(msg.question, segmentId);
+				} else {
+					server.queueAction({ type: "user_action", action: "ask_question", segmentId, question: msg.question });
+					addFeedItem({ kind: "info", title: "Question sent to your coding agent", body: msg.question });
+				}
+				break;
+			}
 		}
 	};
 	server.setMessageHandler(dispatch);

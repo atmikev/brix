@@ -118,6 +118,14 @@ Navigator — Review Working Tree Diff". `scripts/mock-openai.js` is a canned
 provider for zero-cost end-to-end testing (`MOCK_BAD=1` exercises the
 degrade-to-feed path).
 
+**Questions at a step** flow through one capture-agnostic primitive:
+`brix.sh ask <question>` posts an `ask` bus message that the extension routes
+to the navigator (or the driver agent's `ask_question` long-poll when the
+navigator is off), grounded at the current segment. Text uses the sidebar ask
+box; voice uses `scripts/voice.py` — push-to-talk mic capture (ffmpeg) →
+Whisper (Groq/OpenAI API, no pip deps) → `brix.sh ask`. Any other STT source
+can drive the same primitive.
+
 ## Working on this
 
 ```bash
@@ -146,7 +154,7 @@ transcript feed with interval task watching, theater view with auto-hide,
 freshness detection. macOS/Apple Silicon only (TTS). New and lightly tested:
 the navigator (mock-verified; needs real provider shakeout).
 
-Not built yet: voice input (design in `design/NOTES.md` — a local
-whisper daemon feeding the same wait-action bus, deliberately not MCP), and a
-first real `/brix review my changes` run on a substantial diff, which is the
-next thing that will shake out planner-prompt bugs in `docs/review.md`.
+Voice input now works via `scripts/voice.py` → `brix.sh ask` → navigator
+(deliberately not MCP, per `design/NOTES.md`). Not built yet: a first real
+`/brix review my changes` run on a substantial diff, which is the next thing
+that will shake out planner-prompt bugs in `docs/review.md`.

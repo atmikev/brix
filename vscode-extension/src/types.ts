@@ -128,6 +128,12 @@ export interface EndTaskMessage {
 	summary?: string;
 }
 
+/** A question about the current step, from any source (voice daemon, script). */
+export interface AskMessage {
+	type: "ask";
+	question: string;
+}
+
 export type AgentMessage =
 	| SetPlanMessage
 	| InsertAfterMessage
@@ -140,7 +146,8 @@ export type AgentMessage =
 	| ResolveDecisionMessage
 	| PostUpdateMessage
 	| WatchTaskMessage
-	| EndTaskMessage;
+	| EndTaskMessage
+	| AskMessage;
 
 // ── Extension → Agent messages ──
 

@@ -14,8 +14,10 @@ import { makeProvider, ChatFn, NavMessage, NavTool, ToolCall } from "./providers
 
 const MAX_TURNS = 16;
 const MAX_READ_LINES = 250;
+const MAX_READ_BYTES = 5_000_000;
 const MAX_SEARCH_MATCHES = 50;
 const MAX_DIFF_BYTES = 60_000;
+const MAX_UTTERANCES = 50;
 
 const SYSTEM_PROMPT = `You are the navigator in a pair-programming session, hosted inside the Brix VS Code extension. The human is the driver. You are terse, concrete, and adversarial in the best sense: your job is to catch what the driver and their coding agent missed — bugs, missed call sites, convention drift, risky assumptions — and to explain code by pointing at it, never by lecturing.
 
@@ -210,6 +212,24 @@ export function createNavigator(context: vscode.ExtensionContext, deps: Navigato
 			: text;
 	}
 
+	/**
+	 * Resolve a model-supplied path and confirm it stays inside the workspace,
+	 * following symlinks (realpath) so an in-workspace link can't point out.
+	 * Returns the absolute path, or undefined if it escapes / doesn't exist.
+	 */
+	function containedAbs(rel: string): string | undefined {
+		if (!deps.wsFolder) return undefined;
+		try {
+			const abs = path.resolve(deps.wsFolder, rel);
+			const real = fs.realpathSync(abs);
+			const root = fs.realpathSync(deps.wsFolder);
+			if (real === root || real.startsWith(root + path.sep)) return abs;
+		} catch {
+			/* missing file or broken/looping link → not readable */
+		}
+		return undefined;
+	}
+
 	function executeTool(call: ToolCall): { id: string; content: string; isError?: boolean } {
 		const fail = (content: string) => ({ id: call.id, content, isError: true });
 		if (call.invalidJson !== undefined) return fail("tool arguments were not valid JSON — retry with valid JSON");
@@ -220,11 +240,9 @@ export function createNavigator(context: vscode.ExtensionContext, deps: Navigato
 			switch (call.name) {
 				case "read_file": {
 					const rel = String(input.path ?? "");
-					const abs = path.resolve(deps.wsFolder, rel);
-					if (!abs.startsWith(deps.wsFolder + path.sep) && abs !== deps.wsFolder) {
-						return fail(`path escapes the workspace: ${rel}`);
-					}
-					if (!fs.existsSync(abs)) return fail(`file not found: ${rel}`);
+					const abs = containedAbs(rel);
+					if (!abs) return fail(`path not found in workspace: ${rel}`);
+					if (fs.statSync(abs).size > MAX_READ_BYTES) return fail(`file too large to read: ${rel}`);
 					const lines = fs.readFileSync(abs, "utf-8").split("\n");
 					const start = Math.max(1, Number(input.start) || 1);
 					const requestedEnd = Number(input.end) || start + MAX_READ_LINES - 1;
@@ -249,9 +267,11 @@ export function createNavigator(context: vscode.ExtensionContext, deps: Navigato
 					return { id: call.id, content: shown + note };
 				}
 				case "git_diff": {
-					const args = ["diff"];
-					args.push(typeof input.base === "string" && input.base ? input.base : "HEAD");
-					const out = git(args);
+					const base = typeof input.base === "string" && input.base ? input.base : "HEAD";
+					// A leading dash lets git parse the ref as an option (e.g.
+					// --output=/path writes an arbitrary file). Refuse it.
+					if (base.startsWith("-")) return fail("invalid base ref");
+					const out = git(["diff", base]);
 					return { id: call.id, content: out.trim() ? truncate(out, MAX_DIFF_BYTES) : "no changes" };
 				}
 				default:
@@ -269,12 +289,14 @@ export function createNavigator(context: vscode.ExtensionContext, deps: Navigato
 		const findings: DeliverUtterance[] = [];
 		const questions: DeliverUtterance[] = [];
 
-		for (const u of d.utterances) {
+		// Cap the volume a misbehaving endpoint can flood into the surfaces.
+		const utterances = d.utterances.slice(0, MAX_UTTERANCES);
+		for (const u of utterances) {
 			if (u.kind === "question") { questions.push(u); continue; }
 			if (u.kind !== "say") { findings.push(u); continue; }
 			// Anchor safety: model emits workspace-relative paths; resolve, verify,
 			// clamp. A bad anchor downgrades to a finding — never drop, never fake.
-			const anchored = deps.wsFolder ? anchorSay(u, deps.wsFolder) : undefined;
+			const anchored = anchorSay(u);
 			if (anchored) says.push(anchored);
 			else findings.push({ ...u, kind: "finding", title: `${u.title} (unanchored)`, detail: u.detail ?? u.spoken });
 		}
@@ -326,9 +348,9 @@ export function createNavigator(context: vscode.ExtensionContext, deps: Navigato
 		}
 	}
 
-	function anchorSay(u: DeliverUtterance, wsFolder: string): DeliverUtterance | undefined {
-		const abs = path.resolve(wsFolder, u.file!);
-		if (!abs.startsWith(wsFolder + path.sep)) return undefined;
+	function anchorSay(u: DeliverUtterance): DeliverUtterance | undefined {
+		const abs = containedAbs(u.file!);
+		if (!abs) return undefined;
 		let lineCount: number;
 		try {
 			lineCount = fs.readFileSync(abs, "utf-8").split("\n").length;

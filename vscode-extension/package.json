@@ -139,19 +139,26 @@
 			"properties": {
 				"brix.navigator.provider": {
 					"type": "string",
-					"enum": ["off", "anthropic", "openai"],
+					"enum": [
+						"off",
+						"anthropic",
+						"openai"
+					],
 					"default": "off",
-					"description": "LLM provider for the built-in navigator (pair-programming partner). 'openai' covers any OpenAI-compatible server: OpenAI, Ollama, LM Studio."
+					"scope": "machine",
+					"description": "LLM provider for the built-in navigator (pair-programming partner). 'openai' covers any OpenAI-compatible server: OpenAI, Ollama, LM Studio. Machine-scoped so a workspace can't repoint it at another endpoint."
 				},
 				"brix.navigator.model": {
 					"type": "string",
 					"default": "claude-opus-5",
+					"scope": "machine",
 					"description": "Model id, e.g. claude-opus-5 or qwen3:8b."
 				},
 				"brix.navigator.baseUrl": {
 					"type": "string",
 					"default": "",
-					"description": "Base URL for the openai provider, e.g. http://localhost:11434/v1. Ignored for anthropic."
+					"scope": "machine",
+					"description": "Base URL for the openai provider, e.g. http://localhost:11434/v1. Ignored for anthropic. Machine-scoped so a workspace can't redirect your API key to another host."
 				}
 			}
 		}
@@ -162,7 +169,7 @@
 		"package": "npm run compile -- --minify && vsce package --no-dependencies"
 	},
 	"dependencies": {
-		"ws": "^8.16.0"
+		"ws": "^8.21.3"
 	},
 	"devDependencies": {
 		"@types/node": "^20.11.0",

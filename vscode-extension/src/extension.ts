@@ -25,6 +25,31 @@ interface HighlightRequest {
 	end: number;
 }
 
+// ── Workspace path containment ──
+// Agent- and model-supplied file paths (segment.file, handoffPath, the
+// highlight-file fallback) reach openTextDocument/readFile. Confine them to the
+// workspace, resolving symlinks, so a hostile path can't open files elsewhere.
+
+let guardRoot: string | undefined; // realpath'd workspace root
+
+function setGuardRoot(ws: string | undefined): void {
+	try { guardRoot = ws ? fs.realpathSync(ws) : undefined; }
+	catch { guardRoot = ws; }
+}
+
+/** Absolute in-workspace path, or undefined if it escapes / doesn't exist / no workspace. */
+function containedFile(p: string): string | undefined {
+	if (!guardRoot || !p) return undefined;
+	try {
+		const abs = path.resolve(guardRoot, p);
+		const real = fs.realpathSync(abs);
+		if (real === guardRoot || real.startsWith(guardRoot + path.sep)) return abs;
+	} catch {
+		/* missing file or broken link */
+	}
+	return undefined;
+}
+
 let fileWatcher: fs.StatWatcher | undefined;
 
 function startFileWatcher(): void {
@@ -64,7 +89,10 @@ function processHighlightFile(): void {
 		return;
 	}
 
-	highlightRange(request.file, request.start, request.end).catch((err) => {
+	const safe = containedFile(request.file);
+	if (!safe) return; // any local process can write this file — never open outside the workspace
+
+	highlightRange(safe, request.start, request.end).catch((err) => {
 		console.error("[brix] Fallback highlight failed:", err);
 	});
 }
@@ -165,6 +193,19 @@ export function activate(context: vscode.ExtensionContext): void {
 	// Set workspace root so TTS bridge can find venv Python
 	const wsFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
 	if (wsFolder) setWorkspaceRoot(wsFolder);
+	setGuardRoot(wsFolder);
+
+	/** Drop plan segments whose file points outside the workspace (see containedFile). */
+	function sanitizeSegments(segs: Segment[]): Segment[] {
+		if (!wsFolder) return segs; // no workspace → nothing to vouch against
+		const safe = segs.filter((s) => containedFile(s.file));
+		if (safe.length !== segs.length) {
+			vscode.window.showWarningMessage(
+				`Brix: dropped ${segs.length - safe.length} walkthrough segment(s) pointing outside the workspace.`,
+			);
+		}
+		return safe;
+	}
 
 	const walkthrough = new Walkthrough();
 	const sidebar = new SidebarProvider(context.extensionUri);
@@ -359,8 +400,11 @@ export function activate(context: vscode.ExtensionContext): void {
 	}
 
 	function openHandoff(relOrAbsPath: string): void {
-		const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-		const abs = path.isAbsolute(relOrAbsPath) ? relOrAbsPath : root ? path.join(root, relOrAbsPath) : relOrAbsPath;
+		const abs = containedFile(relOrAbsPath);
+		if (!abs) {
+			vscode.window.showWarningMessage(`Brix: refusing to open a path outside the workspace: ${relOrAbsPath}`);
+			return;
+		}
 		vscode.window.showTextDocument(vscode.Uri.file(abs), { preview: true }).then(undefined, () => {
 			vscode.window.showWarningMessage(`Brix: handoff doc not found: ${relOrAbsPath}`);
 		});
@@ -794,10 +838,11 @@ export function activate(context: vscode.ExtensionContext): void {
 		switch (msg.type) {
 			case "set_plan": {
 				walkthroughSaved = false;
-				walkthrough.setPlan(msg.title, msg.segments);
+				const planSegments = sanitizeSegments(msg.segments);
+				walkthrough.setPlan(msg.title, planSegments);
 				sidebar.reveal();
 				// Auto-save so the sidebar's recents list is always populated.
-				storage?.save(msg.title, msg.segments, undefined, planIntegrity).then(() => {
+				storage?.save(msg.title, planSegments, undefined, planIntegrity).then(() => {
 					sidebar.postMessage({ type: "saved_list", walkthroughs: [] });
 					return storage?.list();
 				}).then((list) => {
@@ -811,11 +856,13 @@ export function activate(context: vscode.ExtensionContext): void {
 				break;
 			}
 			case "insert_after":
-				walkthrough.insertAfter(msg.afterSegment, msg.segments);
+				walkthrough.insertAfter(msg.afterSegment, sanitizeSegments(msg.segments));
 				break;
-			case "replace_segment":
-				walkthrough.replaceSegment(msg.id, msg.segment);
+			case "replace_segment": {
+				const [safe] = sanitizeSegments([msg.segment]);
+				if (safe) walkthrough.replaceSegment(msg.id, safe);
 				break;
+			}
 			case "remove_segments":
 				walkthrough.removeSegments(msg.ids);
 				break;

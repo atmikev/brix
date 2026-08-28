@@ -28,6 +28,16 @@ import tempfile
 import threading
 import time
 
+# Trust the OS keychain (which holds corporate proxy CAs like Zscaler) so the
+# HuggingFace model download doesn't fail with CERTIFICATE_VERIFY_FAILED behind
+# a TLS-inspecting proxy. Best-effort: a no-op if truststore isn't installed.
+try:
+    import truststore
+
+    truststore.inject_into_ssl()
+except Exception:
+    pass
+
 
 def _runtime_dir() -> str:
     """Per-user 0700 dir for the socket/pid/log. A shared /tmp let any other

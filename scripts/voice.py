@@ -65,6 +65,9 @@ def find_local_whisper():
 def transcribe_local(py, wav):
     r = subprocess.run(
         [py, "-c",
+         # truststore first: trust the OS keychain so the model download works
+         # behind a corporate TLS proxy (Zscaler). No-op if not installed.
+         "try:\n import truststore; truststore.inject_into_ssl()\nexcept Exception:\n pass\n"
          "import sys, mlx_whisper; "
          "print(mlx_whisper.transcribe(sys.argv[1], path_or_hf_repo=sys.argv[2])['text'])",
          wav, WHISPER_MODEL],

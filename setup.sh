@@ -198,10 +198,12 @@ header "Installing TTS + voice dependencies (mlx-audio, mlx-whisper, sounddevice
 echo "  This may take a few minutes on first install..."
 
 # mlx-whisper powers keyless, offline voice questions (scripts/voice.py).
+# truststore lets Python trust the macOS keychain (corporate proxy CAs like
+# Zscaler live there), which fixes model-download CERTIFICATE_VERIFY_FAILED.
 if $USE_UV; then
-    uv pip install --python "$VENV_PYTHON" pip mlx-audio mlx-whisper 'misaki[en]' sounddevice 2>&1 | grep -E "^(Installed|Already|Resolved)" | head -5
+    uv pip install --python "$VENV_PYTHON" pip mlx-audio mlx-whisper 'misaki[en]' sounddevice truststore 2>&1 | grep -E "^(Installed|Already|Resolved)" | head -5
 else
-    "$VENV_PYTHON" -m pip install --quiet mlx-audio mlx-whisper 'misaki[en]' sounddevice 2>&1 | tail -3
+    "$VENV_PYTHON" -m pip install --quiet mlx-audio mlx-whisper 'misaki[en]' sounddevice truststore 2>&1 | tail -3
 fi
 ok "TTS + voice dependencies installed"
 
@@ -255,23 +257,61 @@ ok "All scripts marked executable"
 # ── Step 6: Pre-download TTS model ──────────────────────────────────────────
 header "Pre-downloading TTS voice model"
 
-echo "  Downloading model (~330 MB on first run)..."
-if "$VENV_PYTHON" -c "
+# Preflight: verify HTTPS to HuggingFace actually works before the big download.
+# On corporate networks (Zscaler and friends) the proxy re-signs TLS with a root
+# CA that Python's certifi bundle doesn't trust → CERTIFICATE_VERIFY_FAILED, and
+# the model never caches. truststore (installed above) fixes it by trusting the
+# macOS keychain, where that CA is installed — this probe injects it and reports.
+HF_PROBE=$("$VENV_PYTHON" - <<'PY' 2>&1
+try:
+    import truststore; truststore.inject_into_ssl()
+except Exception:
+    pass
+import ssl, urllib.request
+try:
+    urllib.request.urlopen("https://huggingface.co", timeout=15).read(1)
+    print("OK")
+except ssl.SSLCertVerificationError:
+    print("SSL")
+except Exception as e:
+    print("NET:" + type(e).__name__)
+PY
+)
+
+if [[ "$HF_PROBE" == "OK" ]]; then
+    ok "HuggingFace reachable (TLS verified)"
+    echo "  Downloading model (~330 MB on first run)..."
+    DL_OUT=$("$VENV_PYTHON" - <<'PY' 2>&1
+try:
+    import truststore; truststore.inject_into_ssl()
+except Exception:
+    pass
 from mlx_audio.tts.generate import generate_audio
 import tempfile, os
 with tempfile.TemporaryDirectory() as d:
-    generate_audio(
-        text='Setup complete.',
-        model='prince-canuma/Kokoro-82M',
-        voice='af_heart',
-        lang_code='a',
-        file_prefix=os.path.join(d, 'test'),
-        verbose=False,
-    )
-" 2>&1 | grep -v "^Fetching\|^$\|INFO\|pip\|spacy\|Collecting\|Downloading\|Installing\|Successfully\|✔" | tail -1; then
-    ok "TTS model downloaded and cached"
+    generate_audio(text='Setup complete.', model='prince-canuma/Kokoro-82M',
+                   voice='af_heart', lang_code='a',
+                   file_prefix=os.path.join(d, 'test'), verbose=False)
+PY
+)
+    if [[ $? -eq 0 ]]; then
+        ok "TTS model downloaded and cached"
+    else
+        warn "Model download failed:"
+        echo "$DL_OUT" | tail -3
+    fi
+elif [[ "$HF_PROBE" == SSL* ]]; then
+    warn "TLS to HuggingFace failed — a corporate proxy (e.g. Zscaler) root CA isn't trusted."
+    echo "     Auto-fix (truststore → macOS keychain) was tried but the CA isn't in your keychain."
+    echo "     Fix one of these, then re-run this script:"
+    echo "       • Add your corporate root CA to Keychain Access → System (usually your IT does this)."
+    echo "       • Or point Python at a CA bundle that includes it, then re-run:"
+    echo "           export REQUESTS_CA_BUNDLE=/path/to/corp-ca.pem SSL_CERT_FILE=/path/to/corp-ca.pem"
+    echo "       • Or copy a cached model from a working Mac into ~/.cache/huggingface/hub"
+    echo "           (tar the folder models--prince-canuma--Kokoro-82M and extract it there)."
+    echo "     Everything else is installed; only voice narration needs the model."
 else
-    warn "Model download had issues — will retry on first use"
+    warn "Couldn't reach HuggingFace (${HF_PROBE#NET:}) — check your network; the model will download on first use."
 fi
 
 # ── Done ────────────────────────────────────────────────────────────────────

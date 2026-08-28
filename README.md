@@ -12,10 +12,6 @@
   A coding agent builds a plan; the VS Code extension opens the files, highlights the lines being discussed, and narrates them aloud while you follow along. Brix <strong>explains</strong> existing code and <strong>reviews</strong> a change (diff, branch, PR) in the context of the code it lands in — and hosts a second, read-only <strong>navigator</strong> LLM that reviews your diffs and answers questions about the step you're on, by voice or text.
 </p>
 
-<p align="center">
-  <img src="docs/cover.png" alt="Brix cover" width="100%" />
-</p>
-
 ---
 
 > **Why this exists.** Agents generate more code than a human can review. Summaries arrive as walls of text, decisions get buried in terminal scrollback, and the result is rubber-stamp approvals. Brix attacks that with paced, importance-ordered walkthroughs that point at real code instead of describing it, a decision queue backed by handoff docs, and a distilled feed of what actually matters.
@@ -58,12 +54,12 @@ It clones the repo into your skills directory, runs `setup.sh`, and asks you to 
 
 Clone into your agent's skills directory, then run setup:
 
-| Agent | Clone into |
-|-------|-----------|
-| **Claude Code** | `~/.claude/skills/brix` |
-| **Amp** | `~/.config/agents/skills/brix` |
-| **OpenCode** | `~/.config/opencode/skills/brix` |
-| **Codex CLI** | `~/.codex/skills/brix` |
+| Agent           | Clone into                       |
+| --------------- | -------------------------------- |
+| **Claude Code** | `~/.claude/skills/brix`          |
+| **Amp**         | `~/.config/agents/skills/brix`   |
+| **OpenCode**    | `~/.config/opencode/skills/brix` |
+| **Codex CLI**   | `~/.codex/skills/brix`           |
 
 ```bash
 git clone https://github.com/atmikev/brix.git <SKILLS_DIR>/brix
@@ -92,11 +88,11 @@ The navigator is a second LLM the extension calls **directly** — provider-agno
 
 Configure it in VS Code settings (machine-scoped, so a workspace can't repoint it):
 
-| Setting | Values |
-|---------|--------|
-| `brix.navigator.provider` | `off` (default) · `anthropic` · `openai` |
-| `brix.navigator.model` | e.g. `claude-opus-5`, `qwen3:8b` |
-| `brix.navigator.baseUrl` | for `openai`, e.g. `http://localhost:11434/v1` (Ollama / LM Studio) |
+| Setting                   | Values                                                              |
+| ------------------------- | ------------------------------------------------------------------- |
+| `brix.navigator.provider` | `off` (default) · `anthropic` · `openai`                            |
+| `brix.navigator.model`    | e.g. `claude-opus-5`, `qwen3:8b`                                    |
+| `brix.navigator.baseUrl`  | for `openai`, e.g. `http://localhost:11434/v1` (Ollama / LM Studio) |
 
 `openai` covers any OpenAI-compatible server, so **Ollama and LM Studio run keyless and local**. For a cloud provider, set the key with **Brix: Set Navigator API Key** (stored in SecretStorage).
 
@@ -119,19 +115,19 @@ python3 scripts/voice.py          # Enter to record, Enter to stop
 
 ## 🎬 Modes & controls
 
-| Mode | Description |
-|------|-------------|
-| 🎥 **Walkthrough** | Highlights move through code while voice narrates in sync. Hands-free. |
-| 📝 **Read** | Text explanations in the terminal, highlighting code as you go. No TTS. |
-| 🎙️ **Podcast** | Renders a single audio file of the whole walkthrough. |
+| Mode               | Description                                                             |
+| ------------------ | ----------------------------------------------------------------------- |
+| 🎥 **Walkthrough** | Highlights move through code while voice narrates in sync. Hands-free.  |
+| 📝 **Read**        | Text explanations in the terminal, highlighting code as you go. No TTS. |
+| 🎙️ **Podcast**     | Renders a single audio file of the whole walkthrough.                   |
 
 The sidebar has play/pause, next/prev highlight and segment, speed, volume, voice, mute, restart, save, and close. Keyboard shortcuts are active during a walkthrough:
 
-| Shortcut | Action | | Shortcut | Action |
-|----------|--------|---|----------|--------|
-| `Ctrl+Shift+Space` | Play / pause | | `Ctrl+Shift+Alt+]` / `[` | Next / prev segment |
-| `Ctrl+Shift+]` / `[` | Next / prev highlight | | `Ctrl+Shift+=` / `-` | Speed up / down |
-| `Ctrl+Shift+\` | Stop | | | |
+| Shortcut             | Action                |     | Shortcut                 | Action              |
+| -------------------- | --------------------- | --- | ------------------------ | ------------------- |
+| `Ctrl+Shift+Space`   | Play / pause          |     | `Ctrl+Shift+Alt+]` / `[` | Next / prev segment |
+| `Ctrl+Shift+]` / `[` | Next / prev highlight |     | `Ctrl+Shift+=` / `-`     | Speed up / down     |
+| `Ctrl+Shift+\`       | Stop                  |     |                          |                     |
 
 ### 💾 Save & share
 
@@ -166,14 +162,14 @@ VS Code extension  ── webview messages ─→  sidebar · theater panels
 
 The extension runs a token-authed HTTP + WebSocket server on localhost. The agent pushes plans, decisions, and feed updates; it pulls user actions from one long-poll. No MCP anywhere — the skill is markdown + shell + curl, so it works in MCP-restricted environments and with any agent that can run shell commands.
 
-| Component | What |
-|-----------|------|
-| `server.ts` | HTTP + WS server, bearer-token auth, message validation |
-| `navigator.ts` · `providers.ts` | The brix-hosted navigator + Anthropic / OpenAI-compatible adapters |
-| `walkthrough.ts` · `highlight.ts` · `theater.ts` | Plan state, editor decorations, theater grid |
-| `integrity.ts` | Freshness snapshots and relocation |
-| `tts-bridge.ts` · `scripts/tts_server.py` | Kokoro TTS daemon over a Unix socket |
-| `scripts/brix.sh` · `scripts/voice.py` | The agent's HTTP helper + local voice input |
+| Component                                        | What                                                               |
+| ------------------------------------------------ | ------------------------------------------------------------------ |
+| `server.ts`                                      | HTTP + WS server, bearer-token auth, message validation            |
+| `navigator.ts` · `providers.ts`                  | The brix-hosted navigator + Anthropic / OpenAI-compatible adapters |
+| `walkthrough.ts` · `highlight.ts` · `theater.ts` | Plan state, editor decorations, theater grid                       |
+| `integrity.ts`                                   | Freshness snapshots and relocation                                 |
+| `tts-bridge.ts` · `scripts/tts_server.py`        | Kokoro TTS daemon over a Unix socket                               |
+| `scripts/brix.sh` · `scripts/voice.py`           | The agent's HTTP helper + local voice input                        |
 
 ## 📄 License
 

@@ -123,8 +123,9 @@ degrade-to-feed path).
 to the navigator (or the driver agent's `ask_question` long-poll when the
 navigator is off), grounded at the current segment. Text uses the sidebar ask
 box; voice uses `scripts/voice.py` — push-to-talk mic capture (ffmpeg) →
-Whisper (Groq/OpenAI API, no pip deps) → `brix.sh ask`. Any other STT source
-can drive the same primitive.
+local mlx-whisper (keyless, offline, same MLX stack as the TTS; Groq/OpenAI
+Whisper API only as a fallback when a key is set) → `brix.sh ask`. Any other
+STT source can drive the same primitive.
 
 ## Working on this
 

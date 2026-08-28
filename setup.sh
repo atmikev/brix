@@ -193,16 +193,17 @@ fi
 VENV_PYTHON="$VENV_DIR/bin/python3"
 
 # ── Step 3: Install TTS dependencies ────────────────────────────────────────
-header "Installing TTS dependencies (mlx-audio + sounddevice)"
+header "Installing TTS + voice dependencies (mlx-audio, mlx-whisper, sounddevice)"
 
 echo "  This may take a few minutes on first install..."
 
+# mlx-whisper powers keyless, offline voice questions (scripts/voice.py).
 if $USE_UV; then
-    uv pip install --python "$VENV_PYTHON" pip mlx-audio 'misaki[en]' sounddevice 2>&1 | grep -E "^(Installed|Already|Resolved)" | head -5
+    uv pip install --python "$VENV_PYTHON" pip mlx-audio mlx-whisper 'misaki[en]' sounddevice 2>&1 | grep -E "^(Installed|Already|Resolved)" | head -5
 else
-    "$VENV_PYTHON" -m pip install --quiet mlx-audio 'misaki[en]' sounddevice 2>&1 | tail -3
+    "$VENV_PYTHON" -m pip install --quiet mlx-audio mlx-whisper 'misaki[en]' sounddevice 2>&1 | tail -3
 fi
-ok "TTS dependencies installed"
+ok "TTS + voice dependencies installed"
 
 # Verify TTS can import
 if "$VENV_PYTHON" -c "from mlx_audio.tts.generate import generate_audio; import misaki.en; print('ok')" 2>/dev/null | grep -q "ok"; then

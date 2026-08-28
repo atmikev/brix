@@ -225,8 +225,11 @@ ok "npm dependencies installed"
 npm run compile --silent 2>&1
 ok "TypeScript compiled"
 
-# Package as VSIX
-npx @vscode/vsce package --no-dependencies --allow-star-activation --allow-missing-repository 2>&1 | grep -E "^( DONE|VSIX)" | head -1
+# Package as VSIX. --yes auto-installs @vscode/vsce; without it, npx prompts
+# "Ok to proceed?" on a fresh machine and hangs silently (the prompt is grepped
+# away here), which looks like a stall right after "TypeScript compiled".
+echo "  Packaging extension (first run fetches @vscode/vsce)..."
+npx --yes @vscode/vsce package --no-dependencies --allow-star-activation --allow-missing-repository 2>&1 | grep -E "^( DONE|VSIX)" | head -1
 VSIX_FILE=$(ls -t "$EXT_DIR"/*.vsix 2>/dev/null | head -1)
 if [[ -z "$VSIX_FILE" ]]; then
     fail "VSIX packaging failed — no .vsix file found"

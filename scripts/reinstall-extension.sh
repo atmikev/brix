@@ -10,7 +10,8 @@ echo "Building extension..."
 npm run compile -- --minify
 
 echo "Packaging extension..."
-npx @vscode/vsce package --no-dependencies
+# --yes: auto-install @vscode/vsce instead of prompting (which hangs a fresh machine)
+npx --yes @vscode/vsce package --no-dependencies
 
 VSIX=$(ls -t *.vsix | head -1)
 

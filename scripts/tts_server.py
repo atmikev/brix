@@ -20,16 +20,35 @@ import json
 import os
 import signal
 import socket
+import stat
 import struct
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 
-SOCKET_PATH = "/tmp/tts-server.sock"
-PID_FILE = "/tmp/tts-server.pid"
+
+def _runtime_dir() -> str:
+    """Per-user 0700 dir for the socket/pid/log. A shared /tmp let any other
+    local user connect to the socket, squat the predictable paths, or symlink
+    the log; a private dir owned by us closes all three."""
+    d = os.path.join(tempfile.gettempdir(), f"brix-{os.getuid()}")
+    os.makedirs(d, mode=0o700, exist_ok=True)
+    st = os.lstat(d)
+    if st.st_uid != os.getuid() or not stat.S_ISDIR(st.st_mode) or (st.st_mode & 0o077):
+        raise RuntimeError(f"insecure runtime dir: {d}")
+    return d
+
+
+RUNTIME_DIR = _runtime_dir()
+SOCKET_PATH = os.path.join(RUNTIME_DIR, "tts-server.sock")
+PID_FILE = os.path.join(RUNTIME_DIR, "tts-server.pid")
+LOG_FILE = os.path.join(RUNTIME_DIR, "tts-server.log")
 DEFAULT_VOICE = os.environ.get("TTS_VOICE", "af_heart")
 DEFAULT_SPEED = float(os.environ.get("TTS_SPEED", "1.0"))
+# TTS_MODEL is loaded by mlx_audio, which can execute code on load — keep it a
+# trusted HuggingFace repo; do not source it from untrusted input.
 DEFAULT_MODEL = os.environ.get("TTS_MODEL", "prince-canuma/Kokoro-82M")
 IDLE_TIMEOUT = int(os.environ.get("TTS_IDLE_TIMEOUT", "300"))  # 5 min default
 
@@ -136,7 +155,13 @@ def run_server():
         print(f"[tts-server] Will auto-shutdown after {IDLE_TIMEOUT}s idle.", flush=True)
 
     server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    server.bind(SOCKET_PATH)
+    # Create the socket unconnectable-by-others from the start (the 0700 parent
+    # dir already blocks other users; this closes the pre-chmod race too).
+    old_umask = os.umask(0o177)
+    try:
+        server.bind(SOCKET_PATH)
+    finally:
+        os.umask(old_umask)
     server.listen(5)
     os.chmod(SOCKET_PATH, 0o600)
 
@@ -197,7 +222,9 @@ def find_venv_python():
 if __name__ == "__main__":
     if "--daemon" in sys.argv:
         python_bin = find_venv_python()
-        log = open("/tmp/tts-server.log", "a")
+        # O_NOFOLLOW: never append through a symlink someone else planted.
+        log_fd = os.open(LOG_FILE, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, 0o600)
+        log = os.fdopen(log_fd, "a")
         proc = subprocess.Popen(
             [python_bin, __file__],
             stdout=log,

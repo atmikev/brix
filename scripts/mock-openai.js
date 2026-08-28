@@ -80,4 +80,4 @@ const server = http.createServer((req, res) => {
 	});
 });
 
-server.listen(3999, () => console.log(`[mock] OpenAI-compatible server on http://localhost:3999/v1 (${BAD ? "BAD deliver" : "happy path"})`));
+server.listen(3999, "127.0.0.1", () => console.log(`[mock] OpenAI-compatible server on http://localhost:3999/v1 (${BAD ? "BAD deliver" : "happy path"})`));

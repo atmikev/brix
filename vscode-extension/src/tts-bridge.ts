@@ -1,10 +1,13 @@
 import * as net from "net";
 import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
 import * as cp from "child_process";
 
-const SOCKET_PATH = "/tmp/tts-server.sock";
-const PID_FILE = "/tmp/tts-server.pid";
+// Must match tts_server.py's _runtime_dir(): a per-user 0700 dir, not shared /tmp.
+const RUNTIME_DIR = path.join(os.tmpdir(), `brix-${process.getuid?.() ?? 0}`);
+const SOCKET_PATH = path.join(RUNTIME_DIR, "tts-server.sock");
+const PID_FILE = path.join(RUNTIME_DIR, "tts-server.pid");
 const SAMPLE_RATE = 24000;
 const SERVER_START_TIMEOUT_MS = 30_000;
 

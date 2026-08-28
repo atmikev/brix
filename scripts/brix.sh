@@ -63,6 +63,11 @@ case "$1" in
         ;;
     wait-action)
         TIMEOUT="${2:-30}"
+        # Numeric only — never let a non-numeric value reach bash arithmetic,
+        # where array-subscript syntax can trigger command substitution.
+        case "$TIMEOUT" in
+            ''|*[!0-9]*) echo '{"error": "timeout must be a positive integer"}' >&2; exit 1 ;;
+        esac
         curl -s --max-time "$((TIMEOUT + 5))" -H "$AUTH_HEADER" "$BASE/api/actions?timeout=$TIMEOUT"
         ;;
     stop)

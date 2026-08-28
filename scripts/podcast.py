@@ -24,9 +24,11 @@ import os
 import socket
 import struct
 import sys
+import tempfile
 import wave
 
-SOCKET_PATH = "/tmp/tts-server.sock"
+# Must match tts_server.py's _runtime_dir(): a per-user 0700 dir, not shared /tmp.
+SOCKET_PATH = os.path.join(tempfile.gettempdir(), f"brix-{os.getuid()}", "tts-server.sock")
 SAMPLE_RATE = 24000  # Kokoro-82M default sample rate
 PAUSE_SECONDS = 0.8  # Silence between segments
 

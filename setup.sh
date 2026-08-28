@@ -122,9 +122,9 @@ header "Configure AI models"
 SKILL_FILE="$SCRIPT_DIR/SKILL.md"
 
 # Read current values from SKILL.md
-CURRENT_LARGE=$(python3 -c "import re; m=re.search(r'\| \`LARGE\` \| \`([^\`]+)\`', open('$SKILL_FILE').read()); print(m.group(1) if m else 'opus')" 2>/dev/null || echo "opus")
-CURRENT_MEDIUM=$(python3 -c "import re; m=re.search(r'\| \`MEDIUM\` \| \`([^\`]+)\`', open('$SKILL_FILE').read()); print(m.group(1) if m else 'sonnet')" 2>/dev/null || echo "sonnet")
-CURRENT_SMALL=$(python3 -c "import re; m=re.search(r'\| \`SMALL\` \| \`([^\`]+)\`', open('$SKILL_FILE').read()); print(m.group(1) if m else 'haiku')" 2>/dev/null || echo "haiku")
+CURRENT_LARGE=$(python3 -c "import re,sys; m=re.search(r'\| \`LARGE\` \| \`([^\`]+)\`', open(sys.argv[1]).read()); print(m.group(1) if m else 'opus')" "$SKILL_FILE" 2>/dev/null || echo "opus")
+CURRENT_MEDIUM=$(python3 -c "import re,sys; m=re.search(r'\| \`MEDIUM\` \| \`([^\`]+)\`', open(sys.argv[1]).read()); print(m.group(1) if m else 'sonnet')" "$SKILL_FILE" 2>/dev/null || echo "sonnet")
+CURRENT_SMALL=$(python3 -c "import re,sys; m=re.search(r'\| \`SMALL\` \| \`([^\`]+)\`', open(sys.argv[1]).read()); print(m.group(1) if m else 'haiku')" "$SKILL_FILE" 2>/dev/null || echo "haiku")
 
 echo ""
 echo -e "  Default model configuration:"
@@ -160,9 +160,11 @@ def sanitize(val):
 
 path, large, medium, small = sys.argv[1], sanitize(sys.argv[2]), sanitize(sys.argv[3]), sanitize(sys.argv[4])
 content = open(path).read()
-content = re.sub(r'(\| `LARGE` \| )`[^`]+`', r'\1`' + large + '`', content)
-content = re.sub(r'(\| `MEDIUM` \| )`[^`]+`', r'\1`' + medium + '`', content)
-content = re.sub(r'(\| `SMALL` \| )`[^`]+`', r'\1`' + small + '`', content)
+# Replacement functions treat the model name literally — a value containing
+# \1, \g<0>, or a backslash must not be interpreted as a regex backreference.
+content = re.sub(r'(\| `LARGE` \| )`[^`]+`', lambda m: m.group(1) + '`' + large + '`', content)
+content = re.sub(r'(\| `MEDIUM` \| )`[^`]+`', lambda m: m.group(1) + '`' + medium + '`', content)
+content = re.sub(r'(\| `SMALL` \| )`[^`]+`', lambda m: m.group(1) + '`' + small + '`', content)
 open(path, 'w').write(content)
 PYEOF
 

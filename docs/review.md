@@ -31,6 +31,10 @@ Ask EXACTLY these two questions using AskUserQuestion (both in one call):
 
 ## Step 1: Resolve the changeset, then scout
 
+Both parts happen in the same response as the preference questions (SKILL.md step 0): resolve the changeset inline, then dispatch the scout with `run_in_background: true` so it runs while the user answers. The scout doesn't use the answers.
+
+**Graphify fast path (optional dependency):** if `command -v graphify` succeeds AND `graphify-out/graph.json` exists, run `graphify query "callers and callees of {changed symbols}"` inline and paste the result into the scout prompt — caller/callee mapping is the scout's slowest step, and the graph precomputes it. The scout then spends its time on the judgment calls (missed call sites, convention fit) instead of grep archaeology. If either check fails, or the query errors, skip silently and scout from scratch.
+
 ### Resolve the changeset (inline, before dispatching the scout)
 
 Figure out what "the change" is and make sure it exists **on disk** — highlights point at files as they exist in the editor, so the post-change file state must be checked out:
@@ -62,7 +66,8 @@ The diff (summary):
 {diff_stat_and_hunks_or_path_to_diff_file}
 
 1. For each changed file, read the enclosing functions/classes of every hunk —
-   not just the changed lines.
+   not just the changed lines. Read only those enclosing ranges, never whole
+   files — you are mapping, not reviewing line-by-line.
 2. Map the neighborhood: for each significant changed symbol, find its callers
    and callees (grep for the symbol name). Note call sites the change did NOT
    touch — these are missed-update candidates.
@@ -105,7 +110,7 @@ These rules apply to whichever planning path runs (single `MEDIUM` agent for Qui
 5. **Carry the scout's risks into the narration.** An untouched call site or convention break belongs in the ttsText of the chapter where the user is looking at the relevant code — not saved for the end. The wrap-up repeats them as a checklist.
 6. **Segment sizes** match explain mode: Quick review like Overview (40-80 lines, 1-8 line highlights), Thorough like Deep Dive (15-40 lines, 6-12 highlights of 1-4 lines).
 
-Show the plan outline in chat before generating (Thorough review), same as explain mode — the user can reorder, skip, or add.
+Show the plan outline in chat (Thorough review), same as explain mode — and dispatch the segment agents in the background in that same response, so generation overlaps the approval pause (see `docs/plan.md`). The user can still reorder, skip, or add; regenerate only the affected segments.
 
 ## Step 4 addendum: the fit-check wrap-up
 

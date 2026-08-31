@@ -39,6 +39,8 @@
 - 📗 Node.js 18+
 - 🖥️ VS Code or Cursor with the CLI enabled (`code` or `cursor` command)
 
+**Optional:** [graphify](https://pypi.org/project/graphifyy/) (`uv tool install graphifyy`) — run `graphify .` in a repo once and brix scouts from its precomputed knowledge graph instead of exploring cold, cutting walkthrough prep from minutes to seconds. Everything works without it.
+
 ## 🔧 Installation
 
 Tell your coding agent:

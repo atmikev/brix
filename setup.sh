@@ -24,7 +24,7 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 step=0
-total_steps=7
+total_steps=8
 
 header() {
     echo ""
@@ -314,6 +314,35 @@ else
     warn "Couldn't reach HuggingFace (${HF_PROBE#NET:}) — check your network; the model will download on first use."
 fi
 
+# ── Step 8: Optional add-on: graphify ───────────────────────────────────────
+header "Optional add-on: graphify (recommended)"
+
+if command -v graphify &>/dev/null; then
+    ok "graphify already installed"
+else
+    echo ""
+    echo -e "  Graphify builds a persistent knowledge graph of a repo. With it, brix"
+    echo -e "  scouts from the precomputed graph instead of exploring cold — walkthrough"
+    echo -e "  prep drops from minutes to seconds. Brix works fully without it."
+    echo ""
+    echo -ne "  Install graphify? [Y/n] "
+    read -r INSTALL_GRAPHIFY </dev/tty
+    if [[ "$INSTALL_GRAPHIFY" =~ ^[Nn] ]]; then
+        skip "graphify — install later with: uv tool install graphifyy"
+    else
+        if $USE_UV; then
+            uv tool install graphifyy -q 2>&1 | tail -2
+        else
+            "$PYTHON" -m pip install --quiet --user graphifyy 2>&1 | tail -2
+        fi
+        if command -v graphify &>/dev/null; then
+            ok "graphify installed — run ${BLUE}graphify .${NC} in a repo once to build its graph"
+        else
+            warn "Installed but 'graphify' not on PATH — open a new terminal, or install uv and re-run"
+        fi
+    fi
+fi
+
 # ── Done ────────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${GREEN}${BOLD}╔══════════════════════════════════════════════╗${NC}"
@@ -399,4 +428,12 @@ echo -e "  ${BOLD}Voice config:${NC}"
 echo -e "  • Change voice: ${BLUE}export TTS_VOICE=am_adam${NC} (male)"
 echo -e "  • Change speed: ${BLUE}export TTS_SPEED=1.2${NC} (faster)"
 echo -e "  • Available: af_heart, af_bella, af_sarah, am_adam, am_michael, bf_emma, bm_george"
+echo ""
+echo -e "  ${BOLD}Optional — faster scouting:${NC}"
+if command -v graphify &>/dev/null; then
+    echo -e "  • ${GREEN}graphify detected${NC} — run ${BLUE}graphify .${NC} in a repo once and brix scouts from its knowledge graph"
+else
+    echo -e "  • Install graphify (${BLUE}uv tool install graphifyy${NC}), run ${BLUE}graphify .${NC} in a repo once,"
+    echo -e "    and brix scouts from its precomputed knowledge graph instead of exploring cold. Not required."
+fi
 echo ""

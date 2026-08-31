@@ -51,7 +51,7 @@ Return a JSON array of segment objects.
 
 ## After the planner finishes
 
-Show the plan outline in chat so the user can reorder or skip segments before generation begins:
+In a **single response**: dispatch all segment agents in the background (Step 3, `docs/segments.md`) AND show the plan outline — generation runs while the user reads it. Most plans are approved unchanged, so by "go" the segments are done or nearly done. If the user reorders or edits instead, keep the unaffected segment files and re-dispatch only the changed/added segments before assembling.
 
 ```
 I'll walk through {feature} in {N} segments:
@@ -61,7 +61,7 @@ I'll walk through {feature} in {N} segments:
 3. src/services/auth.service.ts:20-65 — Core authentication logic [core]
 ...
 
-Say "go" to start generating, or adjust the plan first.
+Say "go" when ready, or adjust the plan first — I'm already generating in the background.
 ```
 
-Once the user approves, proceed to Step 3 — pass the planner's transition objects to the segment agents.
+Once the user approves, wait for the remaining segment agents and assemble (Step 3). The planner's transition objects go into the segment agent prompts.
